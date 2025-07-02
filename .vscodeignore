@@ -1,0 +1,38 @@
+# Build and Test files
+src/**
+tests/**
+*.ts
+*.js.map
+
+# Documentation
+docs/**
+requirements.md
+ui-design.md
+DEVELOPMENT_RULES.md
+.issue/**
+
+# Config files
+tsconfig.json
+webpack.config.js
+eslint.config.mjs
+jest.config.js
+.gitignore
+
+# Development dependencies
+node_modules/**
+
+# VS Code specific
+.vscode/**
+.github/**
+
+# Temporary files
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Only include the essential files:
+# - dist/ (compiled extension)
+# - package.json
+# - LICENSE.txt
+# - extension/resources/ (icons)
