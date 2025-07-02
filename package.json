@@ -92,14 +92,42 @@
                 "icon": "$(filter)"
             },
             {
+                "command": "reposManager.basicFilter",
+                "title": "Basic Filter"
+            },
+            {
                 "command": "reposManager.advancedFilter",
-                "title": "Advanced Filter",
-                "icon": "$(settings-gear)"
+                "title": "Advanced Filter"
             },
             {
                 "command": "reposManager.clearFilters",
                 "title": "Clear All Filters",
                 "icon": "$(clear-all)"
+            },
+            {
+                "command": "reposManager.createWorkspace",
+                "title": "Create Workspace",
+                "icon": "$(new-folder)"
+            },
+            {
+                "command": "reposManager.switchWorkspace",
+                "title": "Switch Workspace",
+                "icon": "$(folder)"
+            },
+            {
+                "command": "reposManager.manageWorkspaces",
+                "title": "Manage Workspaces",
+                "icon": "$(gear)"
+            },
+            {
+                "command": "reposManager.exportWorkspace",
+                "title": "Export Workspace",
+                "icon": "$(export)"
+            },
+            {
+                "command": "reposManager.importWorkspace",
+                "title": "Import Workspace",
+                "icon": "$(import)"
             }
         ],
         "menus": {
@@ -120,14 +148,24 @@
                     "group": "navigation@4"
                 },
                 {
-                    "command": "reposManager.advancedFilter",
-                    "when": "view == reposManager",
-                    "group": "navigation@5"
-                },
-                {
                     "command": "reposManager.clearFilters",
                     "when": "view == reposManager",
                     "group": "1_filter@1"
+                },
+                {
+                    "command": "reposManager.createWorkspace",
+                    "when": "view == reposManager",
+                    "group": "2_workspace@1"
+                },
+                {
+                    "command": "reposManager.switchWorkspace",
+                    "when": "view == reposManager",
+                    "group": "2_workspace@2"
+                },
+                {
+                    "command": "reposManager.manageWorkspaces",
+                    "when": "view == reposManager",
+                    "group": "2_workspace@3"
                 }
             ],
             "view/item/context": [
@@ -142,14 +180,19 @@
                     "group": "1_open@2"
                 },
                 {
+                    "command": "reposManager.toggleFavorite",
+                    "when": "view == reposManager && viewItem == repository",
+                    "group": "2_favorites@1"
+                },
+                {
                     "command": "reposManager.addToFavorites",
                     "when": "view == reposManager && viewItem == repository && !reposManager.isFavorite",
-                    "group": "2_favorites@1"
+                    "group": "2_favorites@2"
                 },
                 {
                     "command": "reposManager.removeFromFavorites",
                     "when": "view == reposManager && viewItem == repository && reposManager.isFavorite",
-                    "group": "2_favorites@1"
+                    "group": "2_favorites@3"
                 }
             ]
         },

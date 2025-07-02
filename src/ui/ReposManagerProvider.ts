@@ -1,10 +1,12 @@
 import * as vscode from 'vscode';
-import { Repository, RepositoryFilter } from '../types';
+import { Repository, RepositoryFilter, Workspace } from '../types';
 import { RepositoryManager } from '../core/RepositoryManager';
+import { WorkspaceManager } from '../core/WorkspaceManager';
 
 interface ExtendedTreeItem extends vscode.TreeItem {
   repositories?: Repository[];
   repository?: Repository;
+  workspace?: Workspace;
 }
 
 /**
@@ -15,16 +17,24 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private currentFilter: RepositoryFilter = {};
-  private groupBy: 'none' | 'language' | 'favorite' = 'none';
+  private groupBy: 'none' | 'language' | 'favorite' | 'workspace' = 'none';
   private isLoading = false;
+  private readonly showWorkspaces = false;
 
   constructor(
     // eslint-disable-next-line no-unused-vars
-    private readonly _repositoryManager: RepositoryManager
+    private readonly _repositoryManager: RepositoryManager,
+    // eslint-disable-next-line no-unused-vars
+    private readonly _workspaceManager: WorkspaceManager
   ) {
     // Listen for repository changes
     this._repositoryManager.onDidChangeRepositories(() => {
       this.setLoading(false);
+      this.refresh();
+    });
+
+    // Listen for workspace changes
+    this._workspaceManager.onDidChangeWorkspaces(() => {
       this.refresh();
     });
   }
@@ -55,7 +65,7 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
   /**
    * Set grouping mode
    */
-  public setGroupBy(groupBy: 'none' | 'language' | 'favorite'): void {
+  public setGroupBy(groupBy: 'none' | 'language' | 'favorite' | 'workspace'): void {
     this.groupBy = groupBy;
     this.refresh();
   }
@@ -65,6 +75,23 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
    */
   public clearFilters(): void {
     this.currentFilter = {};
+    this.refresh();
+  }
+
+  /**
+   * Set workspace view mode
+   */
+  // eslint-disable-next-line no-unused-vars
+  public setShowWorkspaces(_showWorkspaces: boolean): void {
+    // This would normally toggle workspace view, but for now keeping it readonly
+    this.refresh();
+  }
+
+  /**
+   * Filter repositories by workspace
+   */
+  public filterByWorkspace(workspaceId: string | undefined): void {
+    this.currentFilter = { ...this.currentFilter, workspaceId };
     this.refresh();
   }
 
@@ -144,6 +171,13 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
       case 'favorite':
         groupKey = repo.isFavorite ? 'Favorites' : 'Other';
         break;
+      case 'workspace': {
+        // Find workspace containing this repository
+        const workspaces = this._workspaceManager.getWorkspaces();
+        const containingWorkspace = workspaces.find(ws => ws.repositoryIds.includes(repo.id));
+        groupKey = containingWorkspace ? containingWorkspace.name : 'No Workspace';
+        break;
+      }
       default:
         groupKey = 'All';
       }

@@ -267,58 +267,151 @@ export interface Workspace {
   readonly id: string;
   readonly name: string;
   readonly description?: string;
+  readonly icon?: string;
   readonly repositoryIds: readonly string[];
   readonly createdAt: Date;
-  readonly updatedAt: Date;
+  readonly lastAccessedAt: Date;
+  readonly isActive: boolean;
+  readonly tags: readonly string[];
 }
 
 /**
- * Analysis result interface
+ * Workspace export/import format for sharing between developers
  */
-export interface AnalysisResult {
-  readonly repository: Repository;
-  readonly errors: readonly AnalysisError[];
-  readonly warnings: readonly string[];
-  readonly analysisTime: number;
+export interface WorkspaceExport {
+  readonly version: string;
+  readonly workspace: Omit<Workspace, 'id' | 'createdAt' | 'lastAccessedAt' | 'isActive'>;
+  readonly repositoryPaths: readonly string[]; // Export paths instead of IDs for portability
 }
 
 /**
- * Analysis error interface
+ * Workspace statistics and analytics
  */
-export interface AnalysisError {
-  readonly code: string;
-  readonly message: string;
-  readonly severity: ErrorSeverity;
+export interface WorkspaceStats {
+  readonly totalRepositories: number;
+  readonly languageDistribution: Record<string, number>;
+  readonly healthScore: number;
+  readonly lastActivity: Date;
+  readonly totalSize: ProjectSize;
+  readonly averageActivity: number; // Access frequency
 }
 
 /**
- * Error severity levels
+ * Activity record for tracking repository usage
  */
-export type ErrorSeverity = 'error' | 'warning' | 'info';
+export interface ActivityRecord {
+  readonly repositoryId: string;
+  readonly timestamp: Date;
+  readonly action: ActivityAction;
+  readonly duration?: number; // Duration in seconds for 'open' actions
+}
 
 /**
- * Repository filter interface
+ * Activity action types
+ */
+export type ActivityAction =
+  | 'open'       // Opened repository
+  | 'close'      // Closed repository
+  | 'access'     // General access/view
+  | 'edit'       // File editing activity
+  | 'commit'     // Git commit
+  | 'pull'       // Git pull
+  | 'push';      // Git push
+
+/**
+ * Project health score components
+ */
+export interface HealthScore {
+  readonly overall: number; // 0-100 overall score
+  readonly factors: {
+    readonly recentActivity: number;    // How recently was it updated
+    readonly commitFrequency: number;   // How often commits happen
+    readonly dependencyHealth: number;  // How up-to-date dependencies are
+    readonly testCoverage: number;      // Presence and quality of tests
+    readonly documentation: number;     // README and docs quality
+  };
+  readonly warnings: readonly string[]; // Specific health warnings
+  readonly recommendations: readonly string[]; // Improvement suggestions
+}
+
+/**
+ * Usage statistics for analytics
+ */
+export interface UsageStats {
+  readonly totalRepositories: number;
+  readonly totalWorkspaces: number;
+  readonly mostUsedLanguages: readonly LanguageUsage[];
+  readonly mostAccessedRepositories: readonly RepositoryUsage[];
+  readonly activityTrend: readonly ActivityTrend[];
+  readonly healthDistribution: HealthDistribution;
+  readonly periodStart: Date;
+  readonly periodEnd: Date;
+}
+
+/**
+ * Language usage statistics
+ */
+export interface LanguageUsage {
+  readonly language: string;
+  readonly repositoryCount: number;
+  readonly accessCount: number;
+  readonly percentage: number;
+}
+
+/**
+ * Repository usage statistics
+ */
+export interface RepositoryUsage {
+  readonly repositoryId: string;
+  readonly name: string;
+  readonly accessCount: number;
+  readonly lastAccessed: Date;
+  readonly totalTime: number; // Total time spent in seconds
+}
+
+/**
+ * Activity trend data point
+ */
+export interface ActivityTrend {
+  readonly date: Date;
+  readonly accessCount: number;
+  readonly uniqueRepositories: number;
+  readonly totalTime: number;
+}
+
+/**
+ * Health score distribution
+ */
+export interface HealthDistribution {
+  readonly excellent: number; // 90-100
+  readonly good: number;      // 70-89
+  readonly fair: number;      // 50-69
+  readonly poor: number;      // 0-49
+}
+
+/**
+ * Repository filter options
  */
 export interface RepositoryFilter {
-  readonly searchTerm?: string;
+  readonly name?: string;
   readonly language?: string;
   readonly tags?: readonly string[];
   readonly isFavorite?: boolean;
   readonly isArchived?: boolean;
-  readonly owner?: RepositoryOwner;
   readonly hasUncommitted?: boolean;
-  readonly dateRange?: DateRange;
+  readonly workspaceId?: string;
+  readonly searchTerm?: string;
+  readonly dateRange?: {
+    readonly startDate: Date;
+    readonly endDate: Date;
+  };
+  readonly workspaceRepositoryIds?: readonly string[];
 }
 
 /**
- * Sort option interface
+ * Sort options for repositories
  */
 export interface SortOption {
-  readonly field: SortField;
-  readonly order: SortOrder;
+  readonly field: 'name' | 'lastAccessed' | 'accessCount' | 'createdAt' | 'updatedAt' | 'language' | 'lastCommit' | 'size' | 'favorite';
+  readonly order: 'asc' | 'desc';
 }
-
-/**
- * Sort field options
- */
-export type SortField = 'name' | 'lastAccessed' | 'lastCommit' | 'language' | 'size' | 'favorite';

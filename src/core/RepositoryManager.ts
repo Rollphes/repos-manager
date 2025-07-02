@@ -478,14 +478,14 @@ export class RepositoryManager {
 
       // Date range filter
       if (filter.dateRange) {
-        const { start, end } = filter.dateRange;
+        const { startDate, endDate } = filter.dateRange;
         const repoDate = repo.gitInfo.lastCommitDate || repo.updatedAt;
 
-        if (start && repoDate < start) {
+        if (startDate && repoDate < startDate) {
           return false;
         }
 
-        if (end && repoDate > end) {
+        if (endDate && repoDate > endDate) {
           return false;
         }
       }

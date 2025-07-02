@@ -17,7 +17,7 @@
 │  ├─ RepositoryManager                   │
 │  ├─ AnalysisEngine                      │
 │  ├─ SearchEngine                        │
-│  └─ WorkspaceManager                    │
+│  └─ FilterProfileManager                │
 ├─────────────────────────────────────────┤
 │  Data Access Layer                      │
 │  ├─ FileSystemService                   │
@@ -141,42 +141,51 @@ interface FilterCriteria {
 }
 ```
 
-### 4. WorkspaceManager
+### 4. FilterProfileManager
 
-**責務**: ワークスペース管理
+**責務**: フィルタープロファイル管理
 
 ```typescript
-interface WorkspaceManager {
-  createWorkspace(name: string, repositoryIds: string[]): Promise<Workspace>
-  updateWorkspace(id: string, updates: Partial<Workspace>): Promise<Workspace>
-  deleteWorkspace(id: string): Promise<void>
-  getWorkspaces(): Workspace[]
-  switchWorkspace(id: string): Promise<void>
-  getCurrentWorkspace(): Workspace | null
-  addRepositoriesToWorkspace(workspaceId: string, repositoryIds: string[]): Promise<void>
-  removeRepositoriesFromWorkspace(workspaceId: string, repositoryIds: string[]): Promise<void>
-  getWorkspaceStatistics(id: string): Promise<WorkspaceStats>
+interface FilterProfileManager {
+  createProfile(name: string, filters: FilterCriteria, options?: ProfileOptions): Promise<FilterProfile>
+  updateProfile(id: string, updates: Partial<FilterProfile>): Promise<FilterProfile>
+  deleteProfile(id: string): Promise<void>
+  getProfiles(): FilterProfile[]
+  applyProfile(id: string): Promise<Repository[]>
+  getCurrentProfile(): FilterProfile | null
+  exportProfile(id: string): Promise<FilterProfileExport>
+  importProfile(data: FilterProfileExport): Promise<FilterProfile>
+  getProfileStatistics(id: string): Promise<ProfileStats>
 }
 
-interface Workspace {
+interface FilterProfile {
   id: string
   name: string
   description?: string
-  repositoryIds: string[]
+  filters: FilterCriteria
+  isActive: boolean
   createdAt: Date
   updatedAt: Date
-  isActive: boolean
-  color?: string
   icon?: string
+  color?: string
+  tags: string[]
 }
 
-interface WorkspaceStats {
+interface ProfileStats {
   totalRepositories: number
-  totalFiles: number
-  totalLines: number
-  languageDistribution: { [language: string]: number }
+  languageDistribution: Record<string, number>
   lastActivity: Date
-  healthScore: number
+  averageHealth: number
+}
+
+interface FilterProfileExport {
+  version: string
+  profile: Omit<FilterProfile, 'id' | 'createdAt' | 'updatedAt' | 'isActive'>
+  metadata: {
+    exportedBy: string
+    exportedAt: Date
+    compatibilityVersion: string
+  }
 }
 ```
 
@@ -250,13 +259,13 @@ interface Repository {
   name: string                  // リポジトリ名
   displayName?: string          // 表示用名前（カスタム）
   path: string                  // ローカルパス
-  
+
   // Git情報
   gitInfo: GitInfo
-  
+
   // メタデータ
   metadata: RepositoryMetadata
-  
+
   // ユーザー設定
   tags: string[]
   isFavorite: boolean
@@ -264,18 +273,18 @@ interface Repository {
   customColor?: string
   customIcon?: string
   notes?: string
-  
+
   // アクセス情報
   lastAccessed: Date
   accessCount: number
   accessHistory: AccessRecord[]
-  
+
   // システム情報
   createdAt: Date
   updatedAt: Date
   lastScanAt: Date
   scanVersion: string           // スキャンロジックのバージョン
-  
+
   // パフォーマンス情報
   scanDuration: number          // 最後のスキャン時間（ms）
   scanErrors?: string[]         // スキャン時のエラー
@@ -294,7 +303,7 @@ interface AccessRecord {
 interface ReposManagerConfig {
   // バージョン情報
   version: string
-  
+
   // スキャン設定
   scanning: {
     rootPaths: string[]
@@ -306,7 +315,7 @@ interface ReposManagerConfig {
     concurrentScans: number
     autoScanOnStartup: boolean
     scanSchedule?: CronExpression
-    
+
     // 言語検出設定
     languageDetection: {
       minFileSize: number
@@ -315,7 +324,7 @@ interface ReposManagerConfig {
       excludeExtensions: string[]
     }
   }
-  
+
   // 表示設定
   display: {
     visibleColumns: string[]
@@ -328,7 +337,7 @@ interface ReposManagerConfig {
     showIcons: boolean
     showTooltips: boolean
     relativeTimestamps: boolean
-    
+
     // テーマ設定
     theme: {
       colors: { [status: string]: string }
@@ -336,7 +345,7 @@ interface ReposManagerConfig {
       fonts: FontSettings
     }
   }
-  
+
   // 検索設定
   search: {
     maxResults: number
@@ -347,7 +356,7 @@ interface ReposManagerConfig {
     indexFiles: boolean
     indexContent: boolean
   }
-  
+
   // パフォーマンス設定
   performance: {
     maxConcurrentScans: number
@@ -358,7 +367,7 @@ interface ReposManagerConfig {
     backgroundRefresh: boolean
     refreshInterval: number
   }
-  
+
   // API設定
   api: {
     github: GitHubConfig
@@ -367,7 +376,7 @@ interface ReposManagerConfig {
     retryAttempts: number
     rateLimitBuffer: number
   }
-  
+
   // 通知設定
   notifications: {
     enabled: boolean
@@ -377,7 +386,7 @@ interface ReposManagerConfig {
     repositoryUpdates: boolean
     lowActivity: boolean
   }
-  
+
   // セキュリティ設定
   security: {
     encryptCache: boolean
@@ -416,7 +425,7 @@ interface UIState {
     expandedGroups: string[]
     scrollPosition: number
   }
-  
+
   // 検索状態
   search: {
     query: string
@@ -425,14 +434,14 @@ interface UIState {
     isSearching: boolean
     selectedFilter?: string
   }
-  
+
   // ワークスペース状態
   workspace: {
     currentId?: string
     isManaging: boolean
     selectedRepositories: string[]
   }
-  
+
   // 設定状態
   settings: {
     isOpen: boolean
@@ -440,7 +449,7 @@ interface UIState {
     isDirty: boolean
     validationErrors: { [field: string]: string }
   }
-  
+
   // 進行状況
   progress: {
     isScanning: boolean
@@ -467,7 +476,7 @@ const COMMANDS = {
   OPEN_IN_EXPLORER: 'repos-manager.openInExplorer',
   OPEN_IN_TERMINAL: 'repos-manager.openInTerminal',
   OPEN_ON_GITHUB: 'repos-manager.openOnGitHub',
-  
+
   // リポジトリ管理
   ADD_REPOSITORY: 'repos-manager.addRepository',
   REMOVE_REPOSITORY: 'repos-manager.removeRepository',
@@ -475,23 +484,23 @@ const COMMANDS = {
   TOGGLE_ARCHIVE: 'repos-manager.toggleArchive',
   ADD_TAG: 'repos-manager.addTag',
   REMOVE_TAG: 'repos-manager.removeTag',
-  
+
   // 検索・フィルタ
   FOCUS_SEARCH: 'repos-manager.focusSearch',
   CLEAR_SEARCH: 'repos-manager.clearSearch',
   SAVE_FILTER: 'repos-manager.saveFilter',
   LOAD_FILTER: 'repos-manager.loadFilter',
-  
+
   // ワークスペース
   CREATE_WORKSPACE: 'repos-manager.createWorkspace',
   SWITCH_WORKSPACE: 'repos-manager.switchWorkspace',
   MANAGE_WORKSPACES: 'repos-manager.manageWorkspaces',
-  
+
   // 設定
   OPEN_SETTINGS: 'repos-manager.openSettings',
   EXPORT_DATA: 'repos-manager.exportData',
   IMPORT_DATA: 'repos-manager.importData',
-  
+
   // 表示制御
   CHANGE_VIEW_MODE: 'repos-manager.changeViewMode',
   TOGGLE_GROUP_BY: 'repos-manager.toggleGroupBy',
@@ -508,26 +517,26 @@ interface EventSystem {
   onRepositoryRemoved: Event<string>
   onRepositoryUpdated: Event<Repository>
   onRepositoryScanned: Event<{ repository: Repository, duration: number }>
-  
+
   // スキャンイベント
   onScanStarted: Event<{ repositoryCount: number }>
   onScanProgress: Event<{ current: number, total: number, repository: Repository }>
   onScanCompleted: Event<{ duration: number, successCount: number, errorCount: number }>
   onScanError: Event<{ repository: Repository, error: Error }>
-  
+
   // 検索イベント
   onSearchStarted: Event<SearchQuery>
   onSearchCompleted: Event<SearchResult>
   onFilterChanged: Event<FilterCriteria>
-  
+
   // ワークスペースイベント
   onWorkspaceCreated: Event<Workspace>
   onWorkspaceChanged: Event<Workspace>
   onWorkspaceDeleted: Event<string>
-  
+
   // 設定イベント
   onConfigurationChanged: Event<Partial<ReposManagerConfig>>
-  
+
   // UIイベント
   onViewModeChanged: Event<string>
   onGroupByChanged: Event<string>
@@ -545,17 +554,17 @@ enum ErrorType {
   FILESYSTEM_ERROR = 'filesystem_error',
   GIT_ERROR = 'git_error',
   NETWORK_ERROR = 'network_error',
-  
+
   // APIエラー
   API_RATE_LIMIT = 'api_rate_limit',
   API_AUTHENTICATION = 'api_authentication',
   API_NOT_FOUND = 'api_not_found',
-  
+
   // ユーザーエラー
   INVALID_PATH = 'invalid_path',
   INVALID_CONFIGURATION = 'invalid_configuration',
   PERMISSION_DENIED = 'permission_denied',
-  
+
   // パフォーマンスエラー
   TIMEOUT_ERROR = 'timeout_error',
   MEMORY_ERROR = 'memory_error',

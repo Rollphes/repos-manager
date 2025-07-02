@@ -1,10 +1,12 @@
 import * as vscode from 'vscode';
 import { ReposManagerProvider } from './ui/ReposManagerProvider';
 import { RepositoryManager } from './core/RepositoryManager';
+import { WorkspaceManager } from './core/WorkspaceManager';
 import { ConfigurationService } from './services/ConfigurationService';
-import { Repository } from './types';
+import { Repository, Workspace, WorkspaceExport } from './types';
 
 let repositoryManager: RepositoryManager;
+let workspaceManager: WorkspaceManager;
 let treeDataProvider: ReposManagerProvider;
 
 /**
@@ -17,7 +19,8 @@ export function activate(context: vscode.ExtensionContext): void {
   // Initialize services
   const configService = new ConfigurationService();
   repositoryManager = new RepositoryManager(configService, context);
-  treeDataProvider = new ReposManagerProvider(repositoryManager);
+  workspaceManager = new WorkspaceManager(context);
+  treeDataProvider = new ReposManagerProvider(repositoryManager, workspaceManager);
 
   console.warn('✅ [Repos Manager] Services initialized');
 
@@ -80,11 +83,15 @@ export function activate(context: vscode.ExtensionContext): void {
  * Called when the extension is deactivated
  */
 export function deactivate(): void {
-  console.warn('Repos Manager extension is being deactivated');
+  console.warn('🛑 [Repos Manager] Extension is being deactivated');
 
-  // Cleanup resources
-  if (repositoryManager) {
-    repositoryManager.dispose();
+  // Dispose of managers
+  if (workspaceManager) {
+    workspaceManager.dispose();
+  }
+
+  if (treeDataProvider) {
+    treeDataProvider.dispose();
   }
 }
 
@@ -171,15 +178,21 @@ function registerCommands(context: vscode.ExtensionContext): void {
       }
     }),
 
-    vscode.commands.registerCommand('reposManager.toggleFavorite', async (treeItem) => {
-      // Extract repository from TreeItem
-      const repository = (treeItem as { repository?: Repository })?.repository;
-      console.warn('🔥 [FAVORITES] Toggle Favorite command triggered:', repository?.id);
+    // Favorite management commands
+    vscode.commands.registerCommand('reposManager.toggleFavorite', async (repository) => {
+      console.warn('🔥 [FAVORITES] Toggle Favorite command triggered');
 
       if (repository?.id) {
         try {
-          await repositoryManager.toggleFavorite(repository.id);
+          const repositories = repositoryManager.getRepositories();
+          const currentRepo = repositories.find(r => r.id === repository.id);
+          const newFavoriteStatus = !currentRepo?.isFavorite;
+
+          await repositoryManager.setFavorite(repository.id, newFavoriteStatus);
           treeDataProvider.refresh();
+
+          const status = newFavoriteStatus ? 'added to' : 'removed from';
+          vscode.window.showInformationMessage(`${repository.name} ${status} favorites`);
         } catch (error) {
           console.error('Toggle favorite failed:', error);
           vscode.window.showErrorMessage('Failed to toggle favorite status');
@@ -238,10 +251,20 @@ function registerCommands(context: vscode.ExtensionContext): void {
 
     vscode.commands.registerCommand('reposManager.filter', async () => {
       try {
-        await showFilterDialog();
+        await showUnifiedFilterDialog();
       } catch (error) {
         console.error('Filter command failed:', error);
         vscode.window.showErrorMessage('Failed to open filter dialog');
+      }
+    }),
+
+    // Legacy commands for backward compatibility (deprecated)
+    vscode.commands.registerCommand('reposManager.basicFilter', async () => {
+      try {
+        await showBasicFilterDialog();
+      } catch (error) {
+        console.error('Basic filter command failed:', error);
+        vscode.window.showErrorMessage('Failed to open basic filter dialog');
       }
     }),
 
@@ -261,6 +284,52 @@ function registerCommands(context: vscode.ExtensionContext): void {
       } catch (error) {
         console.error('Clear filters command failed:', error);
         vscode.window.showErrorMessage('Failed to clear filters');
+      }
+    }),
+
+    // Workspace management commands
+    vscode.commands.registerCommand('reposManager.createWorkspace', async () => {
+      try {
+        await showCreateWorkspaceDialog();
+      } catch (error) {
+        console.error('Create workspace command failed:', error);
+        vscode.window.showErrorMessage('Failed to create workspace');
+      }
+    }),
+
+    vscode.commands.registerCommand('reposManager.switchWorkspace', async () => {
+      try {
+        await showSwitchWorkspaceDialog();
+      } catch (error) {
+        console.error('Switch workspace command failed:', error);
+        vscode.window.showErrorMessage('Failed to switch workspace');
+      }
+    }),
+
+    vscode.commands.registerCommand('reposManager.manageWorkspaces', async () => {
+      try {
+        await showManageWorkspacesDialog();
+      } catch (error) {
+        console.error('Manage workspaces command failed:', error);
+        vscode.window.showErrorMessage('Failed to open workspace management');
+      }
+    }),
+
+    vscode.commands.registerCommand('reposManager.exportWorkspace', async () => {
+      try {
+        await showExportWorkspaceDialog();
+      } catch (error) {
+        console.error('Export workspace command failed:', error);
+        vscode.window.showErrorMessage('Failed to export workspace');
+      }
+    }),
+
+    vscode.commands.registerCommand('reposManager.importWorkspace', async () => {
+      try {
+        await showImportWorkspaceDialog();
+      } catch (error) {
+        console.error('Import workspace command failed:', error);
+        vscode.window.showErrorMessage('Failed to import workspace');
       }
     })
   ];
@@ -293,9 +362,56 @@ async function showSearchDialog(): Promise<void> {
 }
 
 /**
- * Show filter dialog for repositories
+ * Show unified filter dialog - main entry point for filtering
  */
-async function showFilterDialog(): Promise<void> {
+async function showUnifiedFilterDialog(): Promise<void> {
+  interface FilterTypeQuickPickItem extends vscode.QuickPickItem {
+    type: 'basic' | 'advanced' | 'clear';
+  }
+
+  const filterOptions: FilterTypeQuickPickItem[] = [
+    {
+      label: '$(search) Quick Filter',
+      description: 'Basic filtering options (language, favorites, recent)',
+      type: 'basic'
+    },
+    {
+      label: '$(settings-gear) Advanced Filter',
+      description: 'Detailed filtering with multiple categories',
+      type: 'advanced'
+    },
+    {
+      label: '$(clear-all) Clear All Filters',
+      description: 'Remove all active filters and show all repositories',
+      type: 'clear'
+    }
+  ];
+
+  const selected = await vscode.window.showQuickPick(filterOptions, {
+    placeHolder: 'Choose filter type',
+    ignoreFocusOut: true
+  });
+
+  if (selected) {
+    switch (selected.type) {
+    case 'basic':
+      await showBasicFilterDialog();
+      break;
+    case 'advanced':
+      await showAdvancedFilterDialog();
+      break;
+    case 'clear':
+      treeDataProvider.clearFilters();
+      vscode.window.showInformationMessage('All filters cleared');
+      break;
+    }
+  }
+}
+
+/**
+ * Show basic filter dialog for repositories
+ */
+async function showBasicFilterDialog(): Promise<void> {
   // Get available languages from repositories
   const repositories = repositoryManager.getRepositories();
   const languages = [...new Set(repositories.map(r => r.metadata.language).filter(Boolean))];
@@ -655,4 +771,401 @@ async function showCombineFiltersDialog(): Promise<void> {
     '🚧 Multi-filter combination is coming in the next update! For now, you can apply filters one at a time.',
     'Got it'
   );
+}
+
+// =============================================================================
+// Workspace Management Dialog Functions
+// =============================================================================
+
+/**
+ * Show create workspace dialog
+ */
+async function showCreateWorkspaceDialog(): Promise<void> {
+  // Step 1: Get workspace name
+  const name = await vscode.window.showInputBox({
+    prompt: 'Enter workspace name',
+    placeHolder: 'My Workspace',
+    ignoreFocusOut: true,
+    validateInput: (value) => {
+      if (!value.trim()) {
+        return 'Workspace name cannot be empty';
+      }
+      const existingWorkspaces = workspaceManager.getWorkspaces();
+      if (existingWorkspaces.some(w => w.name === value.trim())) {
+        return 'Workspace with this name already exists';
+      }
+      return undefined;
+    }
+  });
+
+  if (!name) {
+    return;
+  }
+
+  // Step 2: Select repositories
+  const repositories = repositoryManager.getRepositories();
+  if (repositories.length === 0) {
+    vscode.window.showWarningMessage('No repositories found. Please scan for repositories first.');
+    return;
+  }
+
+  interface RepositoryQuickPickItem extends vscode.QuickPickItem {
+    repository: Repository;
+  }
+
+  const repoItems: RepositoryQuickPickItem[] = repositories.map(repo => ({
+    label: `$(folder) ${repo.name}`,
+    description: repo.metadata.language || 'Unknown',
+    detail: repo.path,
+    repository: repo
+  }));
+
+  const selectedRepos = await vscode.window.showQuickPick(repoItems, {
+    placeHolder: 'Select repositories for this workspace',
+    canPickMany: true,
+    ignoreFocusOut: true
+  });
+
+  if (!selectedRepos || selectedRepos.length === 0) {
+    vscode.window.showWarningMessage('No repositories selected. Workspace creation cancelled.');
+    return;
+  }
+
+  // Step 3: Optional description
+  const description = await vscode.window.showInputBox({
+    prompt: 'Enter workspace description (optional)',
+    placeHolder: 'A collection of related projects...',
+    ignoreFocusOut: true
+  });
+
+  // Step 4: Create workspace
+  try {
+    const repositoryIds = selectedRepos.map(item => item.repository.id);
+    const workspace = await workspaceManager.createWorkspace(name.trim(), repositoryIds, {
+      description: description?.trim(),
+      icon: '📁',
+      tags: []
+    });
+
+    vscode.window.showInformationMessage(
+      `Workspace "${workspace.name}" created with ${repositoryIds.length} repositories`
+    );
+  } catch (error) {
+    console.error('Failed to create workspace:', error);
+    vscode.window.showErrorMessage('Failed to create workspace');
+  }
+}
+
+/**
+ * Show switch workspace dialog
+ */
+async function showSwitchWorkspaceDialog(): Promise<void> {
+  const workspaces = workspaceManager.getWorkspaces();
+  if (workspaces.length === 0) {
+    vscode.window.showInformationMessage('No workspaces found. Create a workspace first.');
+    return;
+  }
+
+  interface WorkspaceQuickPickItem extends vscode.QuickPickItem {
+    workspace: Workspace;
+  }
+
+  const workspaceItems: WorkspaceQuickPickItem[] = workspaces.map(workspace => ({
+    label: `${workspace.icon || '📁'} ${workspace.name}`,
+    description: workspace.isActive ? '$(check) Active' : `${workspace.repositoryIds.length} repositories`,
+    detail: workspace.description,
+    workspace
+  }));
+
+  const selected = await vscode.window.showQuickPick(workspaceItems, {
+    placeHolder: 'Select workspace to switch to',
+    ignoreFocusOut: true
+  });
+
+  if (selected) {
+    try {
+      await workspaceManager.switchWorkspace(selected.workspace.id);
+      vscode.window.showInformationMessage(`Switched to workspace "${selected.workspace.name}"`);
+
+      // Apply workspace filter to tree view
+      const repositoryIds = selected.workspace.repositoryIds;
+      treeDataProvider.setFilter({ workspaceRepositoryIds: repositoryIds });
+    } catch (error) {
+      console.error('Failed to switch workspace:', error);
+      vscode.window.showErrorMessage('Failed to switch workspace');
+    }
+  }
+}
+
+/**
+ * Show manage workspaces dialog
+ */
+async function showManageWorkspacesDialog(): Promise<void> {
+  const workspaces = workspaceManager.getWorkspaces();
+  if (workspaces.length === 0) {
+    vscode.window.showInformationMessage('No workspaces found. Create a workspace first.');
+    return;
+  }
+
+  interface WorkspaceManageQuickPickItem extends vscode.QuickPickItem {
+    workspace: Workspace;
+    action: 'switch' | 'edit' | 'delete' | 'export';
+  }
+
+  const workspaceItems: WorkspaceManageQuickPickItem[] = [];
+
+  workspaces.forEach(workspace => {
+    workspaceItems.push(
+      {
+        label: `$(folder) Switch to "${workspace.name}"`,
+        description: workspace.isActive ? '$(check) Active' : `${workspace.repositoryIds.length} repositories`,
+        detail: workspace.description,
+        workspace,
+        action: 'switch'
+      },
+      {
+        label: `$(edit) Edit "${workspace.name}"`,
+        description: 'Modify name, description, or repositories',
+        workspace,
+        action: 'edit'
+      },
+      {
+        label: `$(export) Export "${workspace.name}"`,
+        description: 'Export workspace configuration',
+        workspace,
+        action: 'export'
+      },
+      {
+        label: `$(trash) Delete "${workspace.name}"`,
+        description: 'Permanently delete this workspace',
+        workspace,
+        action: 'delete'
+      }
+    );
+  });
+
+  const selected = await vscode.window.showQuickPick(workspaceItems, {
+    placeHolder: 'Select workspace action',
+    ignoreFocusOut: true
+  });
+
+  if (selected) {
+    switch (selected.action) {
+    case 'switch':
+      await workspaceManager.switchWorkspace(selected.workspace.id);
+      vscode.window.showInformationMessage(`Switched to workspace "${selected.workspace.name}"`);
+      break;
+    case 'edit':
+      await showEditWorkspaceDialog(selected.workspace);
+      break;
+    case 'export':
+      await exportWorkspace(selected.workspace);
+      break;
+    case 'delete':
+      await deleteWorkspace(selected.workspace);
+      break;
+    }
+  }
+}
+
+/**
+ * Show export workspace dialog
+ */
+async function showExportWorkspaceDialog(): Promise<void> {
+  const activeWorkspace = workspaceManager.getActiveWorkspace();
+  if (!activeWorkspace) {
+    // Show workspace selection if no active workspace
+    const workspaces = workspaceManager.getWorkspaces();
+    if (workspaces.length === 0) {
+      vscode.window.showInformationMessage('No workspaces found to export.');
+      return;
+    }
+
+    interface WorkspaceQuickPickItem extends vscode.QuickPickItem {
+      workspace: Workspace;
+    }
+
+    const workspaceItems: WorkspaceQuickPickItem[] = workspaces.map(workspace => ({
+      label: `${workspace.icon || '📁'} ${workspace.name}`,
+      description: `${workspace.repositoryIds.length} repositories`,
+      detail: workspace.description,
+      workspace
+    }));
+
+    const selected = await vscode.window.showQuickPick(workspaceItems, {
+      placeHolder: 'Select workspace to export',
+      ignoreFocusOut: true
+    });
+
+    if (selected) {
+      await exportWorkspace(selected.workspace);
+    }
+  } else {
+    await exportWorkspace(activeWorkspace);
+  }
+}
+
+/**
+ * Show import workspace dialog
+ */
+async function showImportWorkspaceDialog(): Promise<void> {
+  const fileUri = await vscode.window.showOpenDialog({
+    canSelectFiles: true,
+    canSelectFolders: false,
+    canSelectMany: false,
+    filters: {
+      'Workspace files': ['json']
+    },
+    openLabel: 'Import Workspace'
+  });
+
+  if (fileUri && fileUri[0]) {
+    try {
+      const fileContent = await vscode.workspace.fs.readFile(fileUri[0]);
+      const workspaceData = JSON.parse(fileContent.toString()) as WorkspaceExport;
+
+      const repositories = repositoryManager.getRepositories();
+      const workspace = await workspaceManager.importWorkspace(workspaceData, repositories);
+
+      vscode.window.showInformationMessage(
+        `Workspace "${workspace.name}" imported successfully with ${workspace.repositoryIds.length} repositories`
+      );
+    } catch (error) {
+      console.error('Failed to import workspace:', error);
+      vscode.window.showErrorMessage('Failed to import workspace. Please check the file format.');
+    }
+  }
+}
+
+/**
+ * Helper function to edit workspace
+ */
+async function showEditWorkspaceDialog(workspace: Workspace): Promise<void> {
+  // Get current values
+  const currentName = workspace.name;
+  const currentDescription = workspace.description || '';
+  const currentIcon = workspace.icon || '📁';
+
+  // Show name input
+  const name = await vscode.window.showInputBox({
+    title: 'Edit Workspace',
+    prompt: 'Enter workspace name',
+    value: currentName,
+    validateInput: (value) => {
+      if (!value || value.trim().length === 0) {
+        return 'Workspace name cannot be empty';
+      }
+
+      // Check for duplicate names (excluding current workspace)
+      const existingWorkspaces = workspaceManager.getWorkspaces();
+      const isDuplicate = existingWorkspaces.some(ws =>
+        ws.id !== workspace.id && ws.name.toLowerCase() === value.trim().toLowerCase()
+      );
+
+      if (isDuplicate) {
+        return 'A workspace with this name already exists';
+      }
+
+      return undefined;
+    }
+  });
+
+  if (!name) {
+    return; // User cancelled
+  }
+
+  // Show description input
+  const description = await vscode.window.showInputBox({
+    title: 'Edit Workspace - Description',
+    prompt: 'Enter workspace description (optional)',
+    value: currentDescription,
+    placeHolder: 'Description for this workspace...'
+  });
+
+  if (description === undefined) {
+    return; // User cancelled
+  }
+
+  // Show icon selection
+  const iconOptions: Array<{ label: string; description: string; icon: string }> = [
+    { label: '📁', description: 'Folder', icon: '📁' },
+    { label: '🚀', description: 'Project', icon: '🚀' },
+    { label: '⚡', description: 'Development', icon: '⚡' },
+    { label: '🏠', description: 'Home', icon: '🏠' },
+    { label: '💼', description: 'Work', icon: '💼' },
+    { label: '🎯', description: 'Target', icon: '🎯' },
+    { label: '⭐', description: 'Favorite', icon: '⭐' },
+    { label: '🔧', description: 'Tools', icon: '🔧' },
+    { label: '📚', description: 'Learning', icon: '📚' },
+    { label: '🌟', description: 'Special', icon: '🌟' }
+  ];
+
+  const selectedIcon = await vscode.window.showQuickPick(iconOptions, {
+    title: 'Edit Workspace - Select Icon',
+    placeHolder: 'Choose an icon for the workspace',
+    matchOnDescription: true
+  });
+
+  const icon = selectedIcon ? selectedIcon.icon : currentIcon;
+
+  try {
+    await workspaceManager.updateWorkspace(workspace.id, {
+      name: name.trim(),
+      description: description.trim() || undefined,
+      icon
+    });
+
+    vscode.window.showInformationMessage(`Workspace "${name}" updated successfully`);
+  } catch (error) {
+    console.error('Failed to update workspace:', error);
+    vscode.window.showErrorMessage('Failed to update workspace');
+  }
+}
+
+/**
+ * Helper function to export workspace
+ */
+async function exportWorkspace(workspace: Workspace): Promise<void> {
+  try {
+    const repositories = repositoryManager.getRepositories();
+    const exportData = await workspaceManager.exportWorkspace(workspace.id, repositories);
+
+    const saveUri = await vscode.window.showSaveDialog({
+      filters: {
+        'Workspace files': ['json']
+      },
+      defaultUri: vscode.Uri.file(`${workspace.name}-workspace.json`)
+    });
+
+    if (saveUri) {
+      const jsonContent = JSON.stringify(exportData, null, 2);
+      await vscode.workspace.fs.writeFile(saveUri, Buffer.from(jsonContent));
+      vscode.window.showInformationMessage(`Workspace "${workspace.name}" exported successfully`);
+    }
+  } catch (error) {
+    console.error('Failed to export workspace:', error);
+    vscode.window.showErrorMessage('Failed to export workspace');
+  }
+}
+
+/**
+ * Helper function to delete workspace
+ */
+async function deleteWorkspace(workspace: Workspace): Promise<void> {
+  const confirmation = await vscode.window.showWarningMessage(
+    `Are you sure you want to delete workspace "${workspace.name}"?`,
+    { modal: true },
+    'Delete',
+    'Cancel'
+  );
+
+  if (confirmation === 'Delete') {
+    try {
+      await workspaceManager.deleteWorkspace(workspace.id);
+      vscode.window.showInformationMessage(`Workspace "${workspace.name}" deleted successfully`);
+    } catch (error) {
+      console.error('Failed to delete workspace:', error);
+      vscode.window.showErrorMessage('Failed to delete workspace');
+    }
+  }
 }

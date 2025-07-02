@@ -29,22 +29,24 @@
 
 ### 進行中の作業
 
-**Phase 3 ワークスペース管理機能実装完了！**
+**Phase 3 設計変更：ワークスペース → フィルタープロファイル機能**
 
-- ✅ WorkspaceManager.ts 完全実装済み（CRUD、import/export、切り替え機能）
-- ✅ extension.ts ワークスペース管理コマンド・ダイアログ実装済み
-- ✅ types/index.ts ワークスペース関連型定義追加済み
-- ✅ ReposManagerProvider.ts ワークスペース統合・フィルタリング対応済み
-- ✅ package.json ワークスペース管理コマンド追加済み
-- ✅ ワークスペース編集ダイアログの完全実装済み
-- ✅ README.md ワークスペース機能説明追加済み
-- ✅ TypeScriptエラー解消・コンパイル成功・VS Codeインストール完了！
+- ✅ requirements.md フィルタープロファイル機能の詳細設計完了
+- ✅ detailed-design.md FilterProfileManagerコンポーネント設計完了
+- ✅ ui-design.md フィルタープロファイル管理画面設計完了
+- ✅ phase3-workspace-management.md 設計変更内容反映完了
+- 🚧 実装ファイル（WorkspaceManager.ts等）のリファクタリング作業
+- ⭕ package.json コマンド定義の更新
+- ⭕ extension.ts フィルタープロファイル機能統合
+- ⭕ 既存ワークスペース実装の段階的移行
 
 ### 次の予定
 
-- [TEST] ワークスペース機能の動作確認・UI/UXテスト
-- [DOC] 設計ドキュメントのワークスペース機能更新
-- [FEATURE] プロジェクト分析・活動追跡機能（Phase 3.2）
+- [REFACTOR] WorkspaceManager.ts → FilterProfileManager.ts への実装変更
+- [UPDATE] extension.ts フィルタープロファイル機能の統合
+- [UPDATE] package.json コマンド定義の更新（workspace → profile）
+- [MIGRATION] 既存ワークスペースデータのマイグレーション機能
+- [TEST] フィルタープロファイル機能の動作確認・UI/UXテスト
 - [ENHANCEMENT] パフォーマンス最適化・仮想化機能
 - [POLISH] UI/UX改善項目の実装
 
@@ -85,18 +87,18 @@
     1. 問題に遭遇したら速やかにissueファイルを作成
     2. 定期的に未解決のissueを確認・更新
     3. 解決済みのissueは削除せず、参考資料として保持。但しファイル名にprefixとしてclose--を追加
+    4. 状況はステータス:に記載。但し完了とする場合はすべて[x]となっている事
 
 ## ファイル変更カウンター
 
-現在の変更数: 4/5 ← **あと1回のファイル変更で更新必要**
+現在の変更数: 0/5 ← **リセット完了**
 
 **最新変更履歴**:
-1. .issue/ui-improvements.md: お気に入り機能のUX問題を追加・更新
-2. .issue/phase3-workspace-management.md: ステータスを「対応中」から「完了」に更新
-3. README.md: Featuresセクションにワークスペース管理機能を追加
-4. .issue/phase3-workspace-management.md: Phase 3.1実装状況を完了としてマーク
-4. (今後の変更予定)
-5. (今後の変更予定)
+1. requirements.md: フィルタープロファイル管理機能の詳細仕様追加
+2. ui-design.md: ワークスペース管理画面 → フィルタープロファイル管理画面への設計変更
+3. .issue/phase3-workspace-management.md: フィルタープロファイル機能への設計変更完了
+4. .github/copilot-instructions.md: 進行状況・予定をフィルタープロファイル対応に更新
+5. (次回変更予定)
 
 ---
 *Last Updated: 2025-07-02*

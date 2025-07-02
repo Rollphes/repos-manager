@@ -1,6 +1,6 @@
-# Phase 3: ワークスペース管理機能の実装
+# Phase 3: フィルタープロファイル管理機能の実装
 
-## ステータス: ✅ 完了
+## ステータス: 📋 設計変更・仕様策定中
 
 作成日: 2025-07-02
 更新日: 2025-07-02
@@ -9,28 +9,35 @@
 
 ## Phase 3の概要
 
-**目標**: リポジトリの集合管理とプロジェクト分析機能を提供し、開発者のワークフロー効率を大幅に向上させる。
+**目標**: リポジトリの動的グループ化とプロファイル管理機能を提供し、開発者のワークフロー効率を大幅に向上させる。
 
 ### Phase 3で実装する機能
 
-#### 1. ワークスペース管理 🏢
+#### 1. フィルタープロファイル管理 �
 
-#### ワークスペース保存
+#### プロファイル保存
 
-- 複数リポジトリを1つのワークスペースとして保存
-- ワークスペース名、説明、アイコンの設定
-- リポジトリの追加・削除・並び替え
+- 検索・フィルター条件を名前付きプロファイルとして保存
+- プロファイル名、説明、アイコン、色の設定
+- 複合条件（AND/OR）の組み合わせ
 
-##### ワークスペース切り替え
+##### プロファイル切り替え
 
-- 保存したワークスペース間の高速切り替え
-- VS Code Multi-root Workspaceとの連携
-- ワークスペース履歴・お気に入り
+- 保存したプロファイル間の高速切り替え
+- 動的ビュー生成（条件に合致するリポジトリが自動表示）
+- プロファイル履歴・お気に入り
 
-#### 関連プロジェクト表示
+#### スマート条件プロファイル
 
-- 技術スタックが類似するプロジェクトの自動グループ化
-- 依存関係の可視化（簡易版）
+- 新規追加リポジトリが条件に合致すれば自動で表示される
+- 言語・技術スタック・アクティビティレベル等による動的グループ化
+- 複合条件（AND/OR）組み合わせによる高度なフィルタリング
+
+#### プロファイル共有・管理
+
+- プロファイル設定のインポート/エクスポート（JSON形式）
+- チーム間でのプロファイル設定共有
+- プロファイル使用履歴・統計
 
 #### 2. プロジェクト分析 📊
 
@@ -62,9 +69,9 @@
 
 #### エクスポート・インポート機能
 
-- ワークスペース設定のエクスポート（JSON）
+- プロファイル設定のエクスポート（JSON）
 - 他の開発環境からの設定インポート
-- チーム間でのワークスペース共有
+- チーム間でのプロファイル共有
 
 #### 4. パフォーマンス最適化 ⚡
 
@@ -82,32 +89,46 @@
 
 ## 技術実装計画
 
-### Step 1: ワークスペース管理の基盤構築
+### Step 1: フィルタープロファイル管理の基盤構築
 
 #### 新規コンポーネント
 
 ```typescript
-// 1. WorkspaceManager クラス
-interface WorkspaceManager {
-  createWorkspace(name: string, repositoryIds: string[]): Promise<Workspace>
-  deleteWorkspace(id: string): Promise<void>
-  switchWorkspace(id: string): Promise<void>
-  getWorkspaces(): Workspace[]
-  exportWorkspace(id: string): Promise<WorkspaceExport>
-  importWorkspace(data: WorkspaceExport): Promise<Workspace>
+// 1. FilterProfileManager クラス
+interface FilterProfileManager {
+  createProfile(name: string, filters: FilterCriteria): Promise<FilterProfile>
+  updateProfile(id: string, updates: Partial<FilterProfile>): Promise<FilterProfile>
+  deleteProfile(id: string): Promise<void>
+  getProfiles(): FilterProfile[]
+  applyProfile(id: string): Promise<Repository[]>
+  exportProfile(id: string): Promise<FilterProfileExport>
+  importProfile(data: FilterProfileExport): Promise<FilterProfile>
 }
 
-// 2. Workspace データモデル
-interface Workspace {
+// 2. FilterProfile データモデル
+interface FilterProfile {
   id: string
   name: string
   description?: string
   icon?: string
-  repositoryIds: string[]
-  createdAt: Date
-  lastAccessedAt: Date
+  color?: string
+  filters: FilterCriteria
   isActive: boolean
+  createdAt: Date
+  updatedAt: Date
   tags: string[]
+}
+
+interface FilterCriteria {
+  languages?: string[]
+  owners?: ('self' | 'other')[]
+  gitStatus?: ('clean' | 'modified' | 'ahead' | 'behind')[]
+  dateRange?: DateRange
+  sizeRange?: SizeRange
+  tags?: string[]
+  favorites?: boolean
+  archived?: boolean
+  customConditions?: CustomCondition[]
 }
 
 // 3. ProjectAnalyzer クラス
@@ -123,10 +144,11 @@ interface ProjectAnalyzer {
 
 ```typescript
 // VS Code global state + local file storage
-interface WorkspaceStorage {
-  workspaces: Record<string, Workspace>
+interface FilterProfileStorage {
+  profiles: Record<string, FilterProfile>
+  activeProfileId?: string
   activityHistory: ActivityRecord[]
-  settings: WorkspaceSettings
+  settings: FilterProfileSettings
 }
 ```
 
@@ -138,7 +160,7 @@ interface WorkspaceStorage {
 ┌─────────────────────────────────────┐
 │ 📁 Repos Manager         🔄 ⚙️ 📊 │
 ├─────────────────────────────────────┤
-│ 🏢 Workspaces                       │
+│ � Filter Profiles                  │
 │ ├─ 💼 Frontend Projects (Active)    │
 │ ├─ 🔧 Backend Services              │
 │ └─ 📱 Mobile Apps                   │
