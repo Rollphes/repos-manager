@@ -49,7 +49,7 @@ A powerful VS Code extension for managing and organizing your Git repositories w
 
 ### Manual Installation
 
-1. Download the latest `.vsix` file from [Releases](https://github.com/your-username/repos-manager/releases)
+1. Download the latest `.vsix` file from [Releases](https://github.com/Rollphes/repos-manager/releases)
 2. Open Command Palette (`Ctrl+Shift+P`)
 3. Run `Extensions: Install from VSIX...`
 4. Select the downloaded file
@@ -102,25 +102,40 @@ Access settings via `File > Preferences > Settings` and search for "Repos Manage
 ### Basic Operations
 
 #### Repository Navigation
+
 - **Click repository name**: Open in current window
-- **Click 🪟 button**: Open in new window (when visible on hover)
 - **Right-click**: Access context menu with more options
+  - **Open Repository**: Open in current window
+  - **Open in New Window**: Open repository in a new VS Code window
 
 #### Favorites Management
-- **Click ⭐ (filled star)**: Remove from favorites
-- **Click ☆ (empty star)**: Add to favorites
-- **Use Quick Filter**: Show only favorites with the favorites button
+
+- **Right-click on repository**: Access favorites options from context menu
+  - **Add to Favorites**: Mark repository as favorite (shows ⭐ icon)
+  - **Remove from Favorites**: Unmark repository as favorite
+- **Filter by Favorites**: Use advanced filter to show only favorite repositories
 
 #### Search & Filtering
-1. Click the 🔍 **Search** button in the panel header
-2. Enter search terms to find repositories by name
-3. Click the 📊 **Filter** button to access filtering options:
+
+1. **Basic Search**: Click the 🔍 **Search** button in the panel header
+   - Enter search terms to find repositories by name
+   - Real-time filtering as you type
+
+2. **Quick Filter**: Click the 📊 **Filter** button for basic options:
    - Filter by programming language
    - Show only favorites
-   - Show recently modified
-   - Clear all filters
+   - Show recently modified repositories
+
+3. **Advanced Filter**: Click the ⚙️ **Advanced Filter** button for detailed filtering:
+   - **Language Category**: Select from detected programming languages
+   - **Status Category**: Choose favorites, recently modified, or all repositories
+   - **Git Status Category**: Filter by uncommitted changes, branch status
+   - Multiple criteria can be combined
+
+4. **Clear Filters**: Click 🔄 **Clear All Filters** to reset all active filters
 
 #### Manual Refresh
+
 - Click the 🔄 **Refresh** button to rescan repositories
 - Progress bar shows scanning status
 - Real-time updates with detailed messages
@@ -128,14 +143,20 @@ Access settings via `File > Preferences > Settings` and search for "Repos Manage
 ### Advanced Features
 
 #### Repository Analysis
+
 Each repository displays:
-- **Primary Language**: Automatically detected
-- **Last Modified**: Relative time (e.g., "3 days ago")
-- **Git Status**: Visual indicators for repository health
-- **Favorite Status**: Star icon for quick identification
+
+- **Repository Name**: Clear identification of the project
+- **Primary Language**: Automatically detected with color-coded icons
+- **Branch Information**: Shows current branch if not main/master
+- **Git Status Indicators**: Visual indicators for uncommitted changes (● symbol)
+- **Favorite Status**: Star icon (⭐) for repositories marked as favorites
+- **Detailed Tooltip**: Hover to see path, language, branch, last commit date, and remote URL
 
 #### Empty State Handling
+
 When no repositories are found:
+
 - Clear message explaining the situation
 - Helpful guidance to add folders or refresh
 - Easy-to-understand next steps
@@ -160,12 +181,14 @@ Repos Manager recognizes and displays icons for:
 ## ⚡ Performance
 
 ### Optimizations
+
 - **Intelligent Scanning**: Skips unnecessary directories
 - **Async Processing**: Non-blocking repository analysis
 - **Efficient Caching**: Reduces redundant operations
 - **Progress Feedback**: Real-time status updates
 
 ### Recommended Limits
+
 - **Repository Count**: Tested with 50+ repositories
 - **Scan Depth**: Keep under 5 levels for optimal performance
 - **Path Exclusions**: Add large directories (node_modules, etc.) to exclusions
@@ -174,29 +197,44 @@ Repos Manager recognizes and displays icons for:
 
 Access these commands via Command Palette (`Ctrl+Shift+P`):
 
-- `Repos Manager: Refresh Repositories` - Manually rescan repositories
-- `Repos Manager: Search Repositories` - Open search dialog
-- `Repos Manager: Filter Repositories` - Open basic filter options
-- `Repos Manager: Advanced Filter` - Open advanced filtering with categories
-- `Repos Manager: Clear Filters` - Remove all active filters
-- `Repos Manager: Open Settings` - Access extension settings
+### Available Commands
+
+- **`Repos Manager: Refresh Repositories`** - Manually rescan repositories with progress feedback
+- **`Repos Manager: Scan Repositories`** - Perform full repository scan with detailed progress
+- **`Repos Manager: Search Repositories`** - Open search dialog for repository name filtering
+- **`Repos Manager: Filter Repositories`** - Open basic filter options (language, favorites, etc.)
+- **`Repos Manager: Advanced Filter`** - Open advanced filtering with multiple categories
+- **`Repos Manager: Clear Filters`** - Remove all active filters and show all repositories
+- **`Repos Manager: Open Settings`** - Access extension configuration settings
+
+### Context Menu Commands
+
+Right-click on any repository to access:
+
+- **Open Repository** - Open in current window
+- **Open in New Window** - Open in new VS Code window
+- **Add to Favorites** - Mark as favorite (available when not favorited)
+- **Remove from Favorites** - Unmark as favorite (available when favorited)
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
 #### No Repositories Showing
+
 1. **Check Configuration**: Ensure `rootPaths` includes your project directories
 2. **Verify Git Repositories**: Make sure directories contain `.git` folders
 3. **Check Exclusions**: Verify your projects aren't in `excludePaths`
 4. **Manual Refresh**: Click the refresh button to rescan
 
 #### Slow Performance
+
 1. **Reduce Scan Depth**: Lower the `scanDepth` setting
 2. **Add Exclusions**: Exclude large directories like `node_modules`
 3. **Limit Root Paths**: Scan only necessary directories
 
 #### Missing Languages
+
 1. **File Structure**: Ensure language files are in the repository root
 2. **Manual Refresh**: Rescan to update language detection
 3. **Check Support**: Verify the language is in our supported list
@@ -204,23 +242,28 @@ Access these commands via Command Palette (`Ctrl+Shift+P`):
 ### Error Messages
 
 #### "No scan paths configured"
+
 - Add directories to `reposManager.scanning.rootPaths` in settings
 
 #### "Path does not exist or is not accessible"
+
 - Verify the paths in your configuration exist and are readable
 
 #### "Scan cancelled"
+
 - The user or system cancelled the operation - try refreshing again
 
 ## 🛣️ Roadmap
 
 ### 🔜 Coming Soon (Phase 3)
+
 - **Workspace Management**: Create and manage project workspaces
 - **Advanced Analytics**: Repository health scoring and insights
 - **Batch Operations**: Perform actions on multiple repositories
 - **Custom Tags**: Organize repositories with user-defined tags
 
 ### 🔮 Future Plans
+
 - **Remote Repository Integration**: GitHub/GitLab API integration
 - **Team Collaboration**: Share repository collections
 - **Performance Metrics**: Track development activity
@@ -231,6 +274,7 @@ Access these commands via Command Palette (`Ctrl+Shift+P`):
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ### Development Setup
+
 1. Clone the repository
 2. Run `npm install`
 3. Open in VS Code
@@ -238,6 +282,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 5. Make changes and test
 
 ### Building
+
 ```bash
 npm run compile          # TypeScript compilation
 npm run package         # Create VSIX package
@@ -256,12 +301,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/your-username/repos-manager/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-username/repos-manager/discussions)
-- **Email**: support@repos-manager.dev
+- **Issues**: [GitHub Issues](https://github.com/Rollphes/repos-manager/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Rollphes/repos-manager/discussions)
 
 ---
 
-**Made with ❤️ for developers who love organized workflows**
+### Made with ❤️ for developers who love organized workflows
 
 *Star ⭐ this repository if you find it useful!*
