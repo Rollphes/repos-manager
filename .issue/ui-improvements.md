@@ -93,7 +93,7 @@ Phase 1 MVPの基本機能は動作しているが、UXを向上させるため�
 
 **優先度**: 高
 
-**現状**: ✅ **完了** - お気に入り機能が正常動作
+**現状**: ⚠️ **一部改善が必要** - 基本機能は動作するが一部UIの問題あり
 
 **実装内容**:
 
@@ -109,7 +109,13 @@ Phase 1 MVPの基本機能は動作しているが、UXを向上させるため�
 - ✅ TreeItemコンテキストからのリポジトリID抽出
 - ✅ 言語アイコンとお気に入り★の競合解決（★をdescriptionに移動）
 
-**完成度**: 95% - 主要機能完成、微調整のみ
+**未解決の問題**:
+
+- ❌ コンテキストメニューの「Toggle Favorite」が動作しない（クリックしても状態が変わらない）
+- ❌ 「Add to Favorites」と「Toggle Favorite」が重複して表示されている
+- ❌ 星マーク（⭐）のクリックによる直接トグル機能が未実装
+
+**完成度**: 80% - 基本機能は完成、UX改善が必要
 
 ## 最近の修正 🔧
 
@@ -125,9 +131,27 @@ Phase 1 MVPの基本機能は動作しているが、UXを向上させるため�
 1. TreeItemから`repository`プロパティを正しく抽出するよう修正
 2. お気に入り★をlabelからdescriptionに移動し、言語アイコンを保持
 
-- `src/ui/ReposManagerProvider.ts`: TreeDataProvider本体
+### お気に入り機能のUX問題（2025-07-02 追加）
+
+**問題**:
+
+1. コンテキストメニューの「Toggle Favorite」が動作しない
+2. 「Add to Favorites」と「Toggle Favorite」コマンドの重複
+3. 星マーク（⭐）クリックによる直接トグル機能の欠如
+
+**解決策（予定）**:
+
+1. コンテキストメニューの「Toggle Favorite」動作の修正
+2. 「Add/Remove to Favorites」を「Toggle Favorite」に統一
+3. 星マークのクリックハンドラ実装
+4. パッケージ定義の整理（コマンド定義の重複解消）
+
+**関連ファイル**:
+
+- `src/extension.ts`: コマンドハンドラの実装
+- `src/ui/ReposManagerProvider.ts`: TreeDataProvider本体とクリックイベントハンドラ
+- `package.json`: コマンド定義の整理
 - `docs/design/ui-design.md`: UI設計書
-- `package.json`: 拡張機能設定・コマンド定義
 
 ## 備考
 
