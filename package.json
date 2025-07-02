@@ -279,7 +279,9 @@
         "lint": "eslint src",
         "lint:fix": "eslint src --fix",
         "package": "vsce package",
-        "deploy": "vsce publish"
+        "deploy": "vsce publish",
+        "ci": "npm run lint && npm run compile && npm run package",
+        "ci:install": "npm run ci && code --install-extension repos-manager-0.1.0.vsix --force"
     },
     "devDependencies": {
         "@types/jest": "^29.5.14",
