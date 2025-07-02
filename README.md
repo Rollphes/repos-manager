@@ -38,6 +38,14 @@ A powerful VS Code extension for managing and organizing your Git repositories w
 - **Git Status**: Clean, modified, or behind indicators
 - **Project Metadata**: File counts and project analysis
 
+### 🏢 Workspace Management
+
+- **Create & Edit Workspaces**: Group related repositories together
+- **Switch Workspaces**: Quickly change context between projects
+- **Export & Import**: Share workspace configurations between team members
+- **Custom Icons**: Personalize workspaces with meaningful icons
+- **Workspace Filtering**: View only repositories in the current workspace
+
 ## 🚀 Installation
 
 ### From VS Code Marketplace
@@ -134,6 +142,31 @@ Access settings via `File > Preferences > Settings` and search for "Repos Manage
 
 4. **Clear Filters**: Click 🔄 **Clear All Filters** to reset all active filters
 
+#### Workspace Management
+
+1. **Create Workspace**: Click the 📁 **Create Workspace** button
+   - Enter workspace name and optional description
+   - Choose an icon from the selection
+   - Add repositories to the workspace
+
+2. **Switch Workspace**: Click the 🗂️ **Switch Workspace** button
+   - Select from existing workspaces
+   - Filter view shows only repositories in the selected workspace
+
+3. **Manage Workspaces**: Click the ⚙️ **Manage Workspaces** button
+   - Edit workspace name, description, and icon
+   - Add or remove repositories from workspaces
+   - Delete workspaces (with confirmation)
+
+4. **Export/Import Workspaces**:
+   - **Export**: Save workspace configuration to JSON file
+   - **Import**: Load workspace configuration from JSON file
+   - Share configurations with team members
+
+5. **Group by Workspace**: Use the view options to group repositories by workspace
+   - Visual organization by workspace membership
+   - Quick identification of workspace contents
+
 #### Manual Refresh
 
 - Click the 🔄 **Refresh** button to rescan repositories
@@ -160,6 +193,14 @@ When no repositories are found:
 - Clear message explaining the situation
 - Helpful guidance to add folders or refresh
 - Easy-to-understand next steps
+
+### 🗂️ Workspace Management
+
+- **Create Workspaces**: Group related repositories into logical collections
+- **Switch Workspaces**: Quickly switch between different project contexts
+- **Export/Import**: Share workspace configurations with team members
+- **Workspace Filtering**: Filter repositories by workspace membership
+- **Visual Organization**: Custom icons and descriptions for workspaces
 
 ## 🎯 Supported Languages
 
