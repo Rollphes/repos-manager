@@ -245,6 +245,15 @@ function registerCommands(context: vscode.ExtensionContext): void {
       }
     }),
 
+    vscode.commands.registerCommand('reposManager.advancedFilter', async () => {
+      try {
+        await showAdvancedFilterDialog();
+      } catch (error) {
+        console.error('Advanced filter command failed:', error);
+        vscode.window.showErrorMessage('Failed to open advanced filter dialog');
+      }
+    }),
+
     vscode.commands.registerCommand('reposManager.clearFilters', () => {
       try {
         treeDataProvider.clearFilters();
@@ -376,4 +385,274 @@ async function showFilterDialog(): Promise<void> {
     treeDataProvider.setFilter(filter);
     vscode.window.showInformationMessage(message);
   }
+}
+
+/**
+ * Show advanced filter dialog with multiple criteria
+ */
+async function showAdvancedFilterDialog(): Promise<void> {
+  const repositories = repositoryManager.getRepositories();
+
+  // Collect available options
+  const languages = [...new Set(repositories.map(r => r.metadata.language).filter(Boolean))];
+
+  interface AdvancedFilterQuickPickItem extends vscode.QuickPickItem {
+    id: string;
+    type: 'category' | 'language' | 'git-status' | 'date' | 'size' | 'feature' | 'action';
+    value?: string | number;
+  }
+
+  const quickPickItems: AdvancedFilterQuickPickItem[] = [
+    // Category headers
+    {
+      id: 'lang-header',
+      label: '$(symbol-class) Programming Languages',
+      description: 'Filter by primary language',
+      kind: vscode.QuickPickItemKind.Separator,
+      type: 'category'
+    }
+  ];
+
+  // Add language options
+  languages.forEach(language => {
+    const count = repositories.filter(r => r.metadata.language === language).length;
+    quickPickItems.push({
+      id: `lang-${language}`,
+      label: `$(code) ${language}`,
+      description: `${count} repositories`,
+      type: 'language',
+      value: language
+    });
+  });
+
+  // Git status filters
+  quickPickItems.push(
+    {
+      id: 'git-header',
+      label: '$(git-branch) Git Status',
+      description: 'Filter by repository state',
+      kind: vscode.QuickPickItemKind.Separator,
+      type: 'category'
+    },
+    {
+      id: 'git-clean',
+      label: '$(check) Clean Repositories',
+      description: 'No uncommitted changes',
+      type: 'git-status',
+      value: 'clean'
+    },
+    {
+      id: 'git-modified',
+      label: '$(edit) Modified Repositories',
+      description: 'Has uncommitted changes',
+      type: 'git-status',
+      value: 'modified'
+    },
+    {
+      id: 'git-behind',
+      label: '$(arrow-down) Behind Remote',
+      description: 'Local branch is behind remote',
+      type: 'git-status',
+      value: 'behind'
+    }
+  );
+
+  // Date filters
+  quickPickItems.push(
+    {
+      id: 'date-header',
+      label: '$(calendar) Date Filters',
+      description: 'Filter by last activity',
+      kind: vscode.QuickPickItemKind.Separator,
+      type: 'category'
+    },
+    {
+      id: 'date-today',
+      label: '$(clock) Updated Today',
+      description: 'Modified in the last 24 hours',
+      type: 'date',
+      value: 1
+    },
+    {
+      id: 'date-week',
+      label: '$(history) This Week',
+      description: 'Modified in the last 7 days',
+      type: 'date',
+      value: 7
+    },
+    {
+      id: 'date-month',
+      label: '$(archive) This Month',
+      description: 'Modified in the last 30 days',
+      type: 'date',
+      value: 30
+    }
+  );
+
+  // Project features
+  quickPickItems.push(
+    {
+      id: 'feature-header',
+      label: '$(beaker) Project Features',
+      description: 'Filter by project characteristics',
+      kind: vscode.QuickPickItemKind.Separator,
+      type: 'category'
+    },
+    {
+      id: 'feature-tests',
+      label: '$(check-all) Has Tests',
+      description: 'Projects with test files',
+      type: 'feature',
+      value: 'hasTests'
+    },
+    {
+      id: 'feature-cicd',
+      label: '$(gear) Has CI/CD',
+      description: 'Projects with CI/CD configuration',
+      type: 'feature',
+      value: 'hasCicd'
+    },
+    {
+      id: 'feature-large',
+      label: '$(file-zip) Large Projects',
+      description: 'Projects with 1000+ files',
+      type: 'size',
+      value: 'large'
+    }
+  );
+
+  // Special actions
+  quickPickItems.push(
+    {
+      id: 'action-header',
+      label: '$(tools) Special Filters',
+      description: 'Advanced filtering options',
+      kind: vscode.QuickPickItemKind.Separator,
+      type: 'category'
+    },
+    {
+      id: 'action-combine',
+      label: '$(combine) Combine Filters',
+      description: 'Apply multiple filters at once',
+      type: 'action',
+      value: 'combine'
+    },
+    {
+      id: 'action-exclude',
+      label: '$(exclude) Exclude Mode',
+      description: 'Show repositories NOT matching criteria',
+      type: 'action',
+      value: 'exclude'
+    }
+  );
+
+  const selected = await vscode.window.showQuickPick(quickPickItems, {
+    placeHolder: 'Select advanced filter criteria',
+    ignoreFocusOut: true,
+    canPickMany: false
+  });
+
+  if (selected) {
+    await applyAdvancedFilter(selected);
+  }
+}
+
+/**
+ * Apply the selected advanced filter
+ */
+async function applyAdvancedFilter(selected: { id: string; type: string; value?: string | number }): Promise<void> {
+  // Time period constants
+  const ONE_DAY = 1;
+  const ONE_WEEK = 7;
+  const ONE_MONTH = 30;
+  const LARGE_PROJECT_MIN_FILES = 1000;
+
+  let filter = {};
+  let message = '';
+
+  switch (selected.type) {
+  case 'language':
+    filter = { language: selected.value };
+    message = `Filtering by language: ${selected.value}`;
+    break;
+
+  case 'git-status':
+    if (selected.value === 'clean') {
+      filter = { hasUncommitted: false };
+      message = 'Showing clean repositories';
+    } else if (selected.value === 'modified') {
+      filter = { hasUncommitted: true };
+      message = 'Showing modified repositories';
+    } else if (selected.value === 'behind') {
+      // This would need git status checking - for now, show all
+      filter = {};
+      message = 'Git status filtering (coming soon)';
+    }
+    break;
+
+  case 'date': {
+    const daysBack = selected.value as number;
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysBack);
+    filter = { dateRange: { start: cutoffDate, end: new Date() } };
+
+    let timeframe: string;
+    if (daysBack === ONE_DAY) {
+      timeframe = 'today';
+    } else if (daysBack === ONE_WEEK) {
+      timeframe = 'this week';
+    } else if (daysBack === ONE_MONTH) {
+      timeframe = 'this month';
+    } else {
+      timeframe = `last ${daysBack} days`;
+    }
+    message = `Showing repositories updated ${timeframe}`;
+    break;
+  }
+
+  case 'feature':
+    if (selected.value === 'hasTests') {
+      filter = { hasTests: true };
+      message = 'Showing projects with tests';
+    } else if (selected.value === 'hasCicd') {
+      filter = { hasCicd: true };
+      message = 'Showing projects with CI/CD';
+    }
+    break;
+
+  case 'size':
+    if (selected.value === 'large') {
+      filter = { sizeRange: { min: LARGE_PROJECT_MIN_FILES } };
+      message = 'Showing large projects (1000+ files)';
+    }
+    break;
+
+  case 'action':
+    if (selected.value === 'combine') {
+      await showCombineFiltersDialog();
+      return;
+    } else if (selected.value === 'exclude') {
+      // For now, just show a message about future feature
+      vscode.window.showInformationMessage('🚧 Exclude mode coming in future update!');
+      return;
+    }
+    break;
+
+  default:
+    filter = {};
+    message = 'No filter applied';
+  }
+
+  treeDataProvider.setFilter(filter);
+  vscode.window.showInformationMessage(message);
+}
+
+/**
+ * Show dialog for combining multiple filters
+ */
+async function showCombineFiltersDialog(): Promise<void> {
+  vscode.window.showInformationMessage(
+    '🚧 Multi-filter combination is coming in the next update! For now, you can apply filters one at a time.',
+    'Got it'
+  );
 }

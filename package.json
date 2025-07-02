@@ -92,6 +92,11 @@
                 "icon": "$(filter)"
             },
             {
+                "command": "reposManager.advancedFilter",
+                "title": "Advanced Filter",
+                "icon": "$(settings-gear)"
+            },
+            {
                 "command": "reposManager.clearFilters",
                 "title": "Clear All Filters",
                 "icon": "$(clear-all)"
@@ -113,6 +118,11 @@
                     "command": "reposManager.filter",
                     "when": "view == reposManager",
                     "group": "navigation@4"
+                },
+                {
+                    "command": "reposManager.advancedFilter",
+                    "when": "view == reposManager",
+                    "group": "navigation@5"
                 },
                 {
                     "command": "reposManager.clearFilters",
