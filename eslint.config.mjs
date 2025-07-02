@@ -1,84 +1,176 @@
-import js from '@eslint/js';
-import typescript from '@typescript-eslint/eslint-plugin';
-import typescriptParser from '@typescript-eslint/parser';
+import tseslint from "typescript-eslint";
+import simpleImportSort from "eslint-plugin-simple-import-sort";
+import eslintJs from "@eslint/js";
+import eslintConfigPrettier from "eslint-config-prettier";
+import eslintPluginPrettierRecommended from "eslint-plugin-prettier/recommended";
+import jsdoc from 'eslint-plugin-jsdoc';
 
 export default [
-  js.configs.recommended,
-  {
-    files: ['src/**/*.ts'],
-    languageOptions: {
-      parser: typescriptParser,
-      parserOptions: {
-        ecmaVersion: 2020,
-        sourceType: 'module',
-        project: './tsconfig.json'
+  eslintJs.configs.recommended,
+  ...tseslint.config(
+    {
+      files: ["**/*.ts", "**/*.tsx"],
+      extends: [
+        tseslint.configs.strict,
+        tseslint.configs.strictTypeChecked,
+        tseslint.configs.stylistic,
+        tseslint.configs.stylisticTypeChecked,
+      ],
+      languageOptions: {
+        parserOptions: {
+          ecmaVersion: 2022,
+          sourceType: "module",
+          project: true,
+          tsconfigRootDir: import.meta.dirname,
+        },
+        globals: {
+          console: "readonly",
+          Buffer: "readonly",
+          require: "readonly",
+          process: "readonly",
+          __dirname: "readonly",
+          __filename: "readonly",
+          module: "readonly",
+          exports: "readonly",
+        },
       },
-      globals: {
-        console: 'readonly',
-        Buffer: 'readonly',
-        require: 'readonly',
-        process: 'readonly',
-        __dirname: 'readonly',
-        __filename: 'readonly',
-        module: 'readonly',
-        exports: 'readonly'
-      }
+      rules: {
+        "@typescript-eslint/member-ordering": "warn",
+        "@typescript-eslint/explicit-member-accessibility": [
+          "error",
+          {
+            accessibility: "explicit",
+            overrides: {
+              accessors: "explicit",
+              constructors: "no-public",
+              methods: "explicit",
+              properties: "explicit",
+              parameterProperties: "explicit",
+            },
+          },
+        ],
+        "@typescript-eslint/explicit-function-return-type": "error",
+        "@typescript-eslint/naming-convention": [
+          "error",
+          {
+            selector: "default",
+            format: ["camelCase"],
+            leadingUnderscore: "allow",
+          },
+          {
+            selector: "import",
+            format: ["camelCase", "PascalCase"],
+          },
+          {
+            selector: "variable",
+            format: ["camelCase"],
+            leadingUnderscore: "allow",
+            trailingUnderscore: "allow",
+          },
+          {
+            selector: "variable",
+            modifiers: ["const", "global"],
+            types: ["boolean", "number", "string"],
+            format: ["UPPER_CASE"],
+          },
+          {
+            selector: "variable",
+            modifiers: ["const", "global", "exported"],
+            types: ["boolean", "number", "string", "array", "function"],
+            format: ["camelCase"],
+          },
+          {
+            selector: "variable",
+            modifiers: ["const", "global", "exported"],
+            format: ["camelCase", "PascalCase"],
+          },
+          {
+            selector: "property",
+            modifiers: ["requiresQuotes"],
+            format: null,
+          },
+          {
+            selector: "property",
+            modifiers: ["static", "readonly"],
+            types: ["boolean", "number", "string"],
+            format: ["UPPER_CASE"],
+          },
+          {
+            selector: "typeLike",
+            format: ["PascalCase"],
+          },
+          {
+            selector: "objectLiteralProperty",
+            format: null,
+          },
+          {
+            selector: "enumMember",
+            format: ["UPPER_CASE"],
+          },
+          {
+            selector: "typeProperty",
+            format: ["camelCase", "snake_case", "UPPER_CASE"],
+          },
+          {
+            selector: "function",
+            modifiers: ["exported"],
+            format: ["camelCase", "PascalCase"],
+          },
+        ],
+      },
     },
+    {
+      extends: [eslintPluginPrettierRecommended, eslintConfigPrettier],
+      rules: {
+        "prettier/prettier": [
+          "error",
+          {
+            singleQuote: true,
+            semi: false,
+          },
+        ],
+      },
+    }
+  ),
+  {
     plugins: {
-      '@typescript-eslint': typescript
+      "simple-import-sort": simpleImportSort,
     },
     rules: {
-      // TypeScript specific rules
-      '@typescript-eslint/no-unused-vars': ['error', {
-        argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_'
-      }],
-      '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/explicit-function-return-type': 'error',
-      '@typescript-eslint/no-non-null-assertion': 'error',
-      '@typescript-eslint/prefer-readonly': 'error',
-      '@typescript-eslint/no-magic-numbers': ['error', {
-        ignore: [-1, 0, 1, 2, 3, 5, 10, 100, 1000, 5000, 30000, 300000],
-        ignoreArrayIndexes: true,
-        ignoreDefaultValues: true,
-        ignoreEnums: true
-      }],
-
-      // General rules
-      'no-console': ['warn', { allow: ['warn', 'error'] }],
-      'no-debugger': 'error',
-      'no-var': 'error',
-      'prefer-const': 'error',
-      'prefer-arrow-callback': 'error',
-      'arrow-spacing': 'error',
-      'object-shorthand': 'error',
-      'quote-props': ['error', 'as-needed'],
-      'no-trailing-spaces': 'error',
-      'comma-dangle': ['error', 'never'],
-      'semi': ['error', 'always'],
-      'quotes': ['error', 'single'],
-      'indent': ['error', 2],
-      'max-len': ['error', {
-        code: 120,
-        ignoreUrls: true,
-        ignoreStrings: true,
-        ignoreTemplateLiterals: true
-      }],
-
-      // Prevent common errors
-      'no-undef': 'error',
-      'no-unused-expressions': 'error',
-      'no-unreachable': 'error',
-      'no-duplicate-imports': 'error',
-      'prefer-template': 'error',
-      'template-curly-spacing': ['error', 'never']
-    }
+      "simple-import-sort/imports": "error",
+      "simple-import-sort/exports": "error",
+    },
   },
   {
-    files: ['**/*.test.ts', '**/*.spec.ts'],
     rules: {
-      '@typescript-eslint/no-magic-numbers': 'off',
-      'no-console': 'off'
-    }
-  }
+      complexity: ["error"],
+      curly: ["error", "multi-or-nest", "consistent"],
+      "dot-notation": "error",
+      eqeqeq: ["error", "smart"],
+      "no-new": "error",
+      "no-new-wrappers": "error",
+      "no-param-reassign": "error",
+      "no-throw-literal": "error",
+      "func-style": ["warn", "declaration"],
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: ["./", "../", "~/"],
+        },
+      ],
+    },
+  },
+  // jsdoc.configs['flat/recommended'],
+  // {
+  //   files: ['**/*.ts'],
+  //   plugins: {
+  //     jsdoc,
+  //   },
+  //   rules: {
+  //     'jsdoc/require-description': 'warn'
+  //   }
+  // },
+  {
+    ignores: ["dist/", "node_modules/", "*.config.mjs", "*.config.js","tests/**/*.test.ts"],
+  },
 ];
