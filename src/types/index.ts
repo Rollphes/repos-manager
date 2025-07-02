@@ -138,6 +138,7 @@ export interface FilterCriteria {
   readonly excludeArchived: boolean;
   readonly hasTests?: boolean;
   readonly hasCicd?: boolean;
+  readonly customConditions?: readonly CustomCondition[];
 }
 
 /**
@@ -414,4 +415,54 @@ export interface RepositoryFilter {
 export interface SortOption {
   readonly field: 'name' | 'lastAccessed' | 'accessCount' | 'createdAt' | 'updatedAt' | 'language' | 'lastCommit' | 'size' | 'favorite';
   readonly order: 'asc' | 'desc';
+}
+
+/**
+ * Filter Profile interface - replaces static Workspace with dynamic filter-based grouping
+ */
+export interface FilterProfile {
+  readonly id: string;
+  readonly name: string;
+  readonly description?: string;
+  readonly icon?: string;
+  readonly color?: string;
+  readonly filters: FilterCriteria;
+  readonly isActive: boolean;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+  readonly tags: readonly string[];
+}
+
+/**
+ * Filter Profile export/import format for sharing between developers
+ */
+export interface FilterProfileExport {
+  readonly version: string;
+  readonly profile: Omit<FilterProfile, 'id' | 'createdAt' | 'updatedAt' | 'isActive'>;
+  readonly metadata: {
+    readonly exportedBy: string;
+    readonly exportedAt: Date;
+    readonly compatibilityVersion: string;
+  };
+}
+
+/**
+ * Filter Profile statistics and analytics
+ */
+export interface FilterProfileStats {
+  readonly totalRepositories: number;
+  readonly languageDistribution: Record<string, number>;
+  readonly lastActivity: Date;
+  readonly averageHealth: number;
+  readonly matchedRepositoryIds: readonly string[];
+}
+
+/**
+ * Custom filter condition for advanced filtering
+ */
+export interface CustomCondition {
+  readonly field: string;
+  readonly operator: 'equals' | 'contains' | 'startsWith' | 'endsWith' | 'regex' | 'greaterThan' | 'lessThan';
+  readonly value: string | number | boolean;
+  readonly caseSensitive?: boolean;
 }

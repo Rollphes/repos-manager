@@ -14,13 +14,13 @@
     "icon": "extension/resources/icon.png",
     "categories": [
         "Other"
-    ],
-    "keywords": [
+    ],        "keywords": [
         "git",
         "repository",
         "project",
         "manager",
-        "workspace",
+        "filter",
+        "profile",
         "scanner"
     ],
     "activationEvents": [
@@ -105,28 +105,28 @@
                 "icon": "$(clear-all)"
             },
             {
-                "command": "reposManager.createWorkspace",
-                "title": "Create Workspace",
+                "command": "reposManager.createFilterProfile",
+                "title": "Create Filter Profile",
                 "icon": "$(new-folder)"
             },
             {
-                "command": "reposManager.switchWorkspace",
-                "title": "Switch Workspace",
-                "icon": "$(folder)"
+                "command": "reposManager.switchFilterProfile",
+                "title": "Switch Filter Profile",
+                "icon": "$(filter)"
             },
             {
-                "command": "reposManager.manageWorkspaces",
-                "title": "Manage Workspaces",
+                "command": "reposManager.manageFilterProfiles",
+                "title": "Manage Filter Profiles",
                 "icon": "$(gear)"
             },
             {
-                "command": "reposManager.exportWorkspace",
-                "title": "Export Workspace",
+                "command": "reposManager.exportFilterProfile",
+                "title": "Export Filter Profile",
                 "icon": "$(export)"
             },
             {
-                "command": "reposManager.importWorkspace",
-                "title": "Import Workspace",
+                "command": "reposManager.importFilterProfile",
+                "title": "Import Filter Profile",
                 "icon": "$(import)"
             }
         ],
@@ -153,19 +153,19 @@
                     "group": "1_filter@1"
                 },
                 {
-                    "command": "reposManager.createWorkspace",
+                    "command": "reposManager.createFilterProfile",
                     "when": "view == reposManager",
-                    "group": "2_workspace@1"
+                    "group": "2_profile@1"
                 },
                 {
-                    "command": "reposManager.switchWorkspace",
+                    "command": "reposManager.switchFilterProfile",
                     "when": "view == reposManager",
-                    "group": "2_workspace@2"
+                    "group": "2_profile@2"
                 },
                 {
-                    "command": "reposManager.manageWorkspaces",
+                    "command": "reposManager.manageFilterProfiles",
                     "when": "view == reposManager",
-                    "group": "2_workspace@3"
+                    "group": "2_profile@3"
                 }
             ],
             "view/item/context": [

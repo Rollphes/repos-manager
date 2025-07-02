@@ -107,13 +107,13 @@ npm run lint
 
 ## ファイル変更カウンター
 
-現在の変更数: 0/5 ← **リセット完了**
+現在の変更数: 4/5 ← **あと1回のファイル変更で更新必要**
 
 **最新変更履歴**:
-1. requirements.md: フィルタープロファイル管理機能の詳細仕様追加
-2. ui-design.md: ワークスペース管理画面 → フィルタープロファイル管理画面への設計変更
-3. .issue/phase3-workspace-management.md: フィルタープロファイル機能への設計変更完了
-4. .github/copilot-instructions.md: 進行状況・予定をフィルタープロファイル対応に更新
+1. src/types/index.ts: FilterProfile関連型定義を追加
+2. src/core/FilterProfileManager.ts: フィルタープロファイル管理クラスの新規作成
+3. package.json: コマンド定義をworkspace→filterProfile系に更新
+4. .github/copilot-instructions.md: ファイル変更カウンター更新
 5. (次回変更予定)
 
 ---
