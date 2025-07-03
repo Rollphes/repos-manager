@@ -1,6 +1,8 @@
+import { CacheService } from '@services/CacheService'
 import { ConfigurationService } from '@services/ConfigurationService'
 import { FavoriteService } from '@services/FavoriteService'
 import { GitService } from '@services/GitService'
+import { PathDetectionService } from '@services/PathDetectionService'
 import { RepositoryAnalyzer } from '@services/RepositoryAnalyzer'
 import { Repository, RepositoryFilter, SortOption } from '@types'
 import * as fs from 'fs/promises'
@@ -41,6 +43,8 @@ export class RepositoryManager {
   private readonly gitService: GitService
   private readonly analyzer: RepositoryAnalyzer
   private readonly favoriteService: FavoriteService
+  private readonly cacheService: CacheService
+  private readonly pathDetectionService: PathDetectionService
   private isScanning = false
   private readonly onDidChangeRepositories = new vscode.EventEmitter<void>()
 
@@ -56,6 +60,9 @@ export class RepositoryManager {
     this.gitService = new GitService()
     this.analyzer = new RepositoryAnalyzer()
     this.favoriteService = new FavoriteService(this.context)
+    if (this.context) this.cacheService = new CacheService(this.context)
+    else throw new Error('ExtensionContext is required for CacheService')
+    this.pathDetectionService = new PathDetectionService()
 
     // Listen for configuration changes
     this.configService.onDidChangeConfigurationEvent(
@@ -323,11 +330,169 @@ export class RepositoryManager {
   }
 
   /**
+   * Get the path detection service instance
+   */
+  public getPathDetectionService(): PathDetectionService {
+    return this.pathDetectionService
+  }
+
+  /**
    * Dispose resources
    */
   public dispose(): void {
     this.onDidChangeRepositories.dispose()
     this.favoriteService.dispose()
+  }
+
+  public async loadRepositoriesFromCache(): Promise<Repository[]> {
+    if (!this.context) return []
+
+    const cachedRepos = await this.cacheService.loadCache()
+    if (!cachedRepos) return []
+
+    return cachedRepos.map((cached) => ({
+      id: cached.id,
+      name: cached.name,
+      path: cached.path,
+      displayName: cached.displayName,
+      gitInfo: cached.gitInfo,
+      metadata: cached.metadata,
+      tags: cached.tags,
+      isFavorite: cached.isFavorite,
+      isArchived: cached.isArchived,
+      lastAccessed: cached.lastAccessed,
+      accessCount: cached.accessCount,
+      createdAt: cached.createdAt,
+      updatedAt: cached.updatedAt,
+      lastScanAt: cached.lastScanAt,
+    }))
+  }
+
+  public async performBackgroundScan(
+    cachedRepositories: Repository[],
+    progressCallback?: ProgressCallback,
+  ): Promise<Repository[]> {
+    if (!this.context) return []
+
+    const config = this.configService.getConfiguration()
+    const { rootPaths } = config.scanning
+    const updatedRepositories: Repository[] = []
+    const validPaths: string[] = []
+
+    progressCallback?.('Checking for repository changes...', 0)
+
+    for (const [index, rootPath] of rootPaths.entries()) {
+      try {
+        const foundRepos = await this.scanPath(
+          rootPath,
+          3,
+          false,
+          [],
+          undefined,
+        )
+
+        for (const [, repo] of foundRepos) {
+          validPaths.push(repo.path)
+
+          const cachedRepo = cachedRepositories.find(
+            (c) => c.path === repo.path,
+          )
+
+          if (!cachedRepo) {
+            updatedRepositories.push(repo)
+            await this.cacheService.updateRepositoryCache(repo)
+          } else {
+            const cachedWithTimestamp = await this.cacheService.loadCache()
+            const cached = cachedWithTimestamp?.find(
+              (c) => c.path === repo.path,
+            )
+
+            if (
+              cached &&
+              (await this.cacheService.isDirectoryChanged(cached))
+            ) {
+              try {
+                const metadata = await this.analyzer.analyzeRepository(
+                  repo.path,
+                )
+                const updatedRepo: Repository = {
+                  ...repo,
+                  metadata,
+                  lastScanAt: new Date(),
+                }
+                updatedRepositories.push(updatedRepo)
+                await this.cacheService.updateRepositoryCache(updatedRepo)
+              } catch (analyzeError) {
+                console.warn(
+                  `Failed to analyze repository ${repo.path}:`,
+                  analyzeError,
+                )
+              }
+            }
+          }
+        }
+
+        const progress = Math.floor(((index + 1) / rootPaths.length) * 80)
+        progressCallback?.(
+          `Updated ${String(updatedRepositories.length)} repositories`,
+          progress,
+        )
+      } catch (error) {
+        console.warn(`Failed to scan directory ${rootPath}:`, error)
+      }
+    }
+
+    await this.cacheService.cleanupCache(validPaths)
+    progressCallback?.('Background scan completed', 100)
+
+    return updatedRepositories
+  }
+
+  public async performFullScan(
+    progressCallback?: ProgressCallback,
+  ): Promise<Repository[]> {
+    if (!this.context) return []
+
+    progressCallback?.('Performing full repository scan...', 0)
+
+    await this.scanRepositories(undefined, progressCallback)
+
+    const repositories = Array.from(this.repositories.values())
+    await this.cacheService.saveCache(repositories)
+
+    progressCallback?.('Full scan completed', 100)
+    return repositories
+  }
+
+  public async performSmartScan(
+    progressCallback?: ProgressCallback,
+  ): Promise<{ cached: Repository[]; updated?: Repository[] }> {
+    if (!this.context) {
+      const repositories = await this.performFullScan(progressCallback)
+      return { cached: repositories }
+    }
+
+    const cachedRepositories = await this.loadRepositoriesFromCache()
+
+    if (cachedRepositories.length > 0) {
+      progressCallback?.('Loading cached repositories...', 20)
+
+      const updatedRepositories = await this.performBackgroundScan(
+        cachedRepositories,
+        (message, progress) => {
+          progressCallback?.(message, 20 + (progress ?? 0) * 0.8)
+        },
+      )
+
+      return {
+        cached: cachedRepositories,
+        updated:
+          updatedRepositories.length > 0 ? updatedRepositories : undefined,
+      }
+    } else {
+      const repositories = await this.performFullScan(progressCallback)
+      return { cached: repositories }
+    }
   }
 
   // Private methods
@@ -672,4 +837,6 @@ export class RepositoryManager {
 
     return distribution
   }
+
+  // Private methods
 }

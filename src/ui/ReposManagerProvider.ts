@@ -21,6 +21,8 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
   private currentFilter: RepositoryFilter = {}
   private groupBy: 'none' | 'language' | 'favorite' = 'none'
   private isLoading = false
+  private sortBy: 'lastModified' | 'name' | 'language' | 'favorite' =
+    'lastModified'
 
   constructor(
     private readonly repositoryManager: RepositoryManager,
@@ -80,6 +82,37 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
   }
 
   /**
+   * Toggle group view mode
+   */
+  public toggleGroupView(): void {
+    const modes: ('none' | 'language' | 'favorite')[] = [
+      'none',
+      'language',
+      'favorite',
+    ]
+    const currentIndex = modes.indexOf(this.groupBy)
+    const nextIndex = (currentIndex + 1) % modes.length
+    this.groupBy = modes[nextIndex] ?? 'none'
+    this.refresh()
+  }
+
+  /**
+   * Get current group view mode
+   */
+  public getGroupViewMode(): string {
+    switch (this.groupBy) {
+      case 'none':
+        return 'Flat view'
+      case 'language':
+        return 'Language groups'
+      case 'favorite':
+        return 'Favorites groups'
+      default:
+        return 'Unknown'
+    }
+  }
+
+  /**
    * Clear all filters
    */
   public clearFilters(): void {
@@ -104,17 +137,17 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
    */
   public async showFilterDialog(): Promise<void> {
     const filterOptions = [
-      { label: '🗂️ All Languages', value: 'all' },
-      { label: '⭐ Favorites Only', value: 'favorites' },
-      { label: '📅 Recently Modified', value: 'recent' },
-      { label: '🌟 JavaScript', value: 'JavaScript' },
-      { label: '🔷 TypeScript', value: 'TypeScript' },
-      { label: '🐍 Python', value: 'Python' },
-      { label: '☕ Java', value: 'Java' },
-      { label: '⚡ C++', value: 'C++' },
-      { label: '🦀 Rust', value: 'Rust' },
-      { label: '💎 Ruby', value: 'Ruby' },
-      { label: '🐘 PHP', value: 'PHP' },
+      { label: 'All Languages', value: 'all' },
+      { label: 'Favorites Only', value: 'favorites' },
+      { label: 'Recently Modified', value: 'recent' },
+      { label: 'JavaScript', value: 'JavaScript' },
+      { label: 'TypeScript', value: 'TypeScript' },
+      { label: 'Python', value: 'Python' },
+      { label: 'Java', value: 'Java' },
+      { label: 'C++', value: 'C++' },
+      { label: 'Rust', value: 'Rust' },
+      { label: 'Ruby', value: 'Ruby' },
+      { label: 'PHP', value: 'PHP' },
       { label: '🔵 Go', value: 'Go' },
       { label: '💜 C#', value: 'C#' },
     ]
@@ -148,9 +181,34 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
   }
 
   /**
-   * Set filter profile view mode
-   * @param showProfiles
+   * Toggle sort order
    */
+  public toggleSort(): void {
+    const modes = ['lastModified', 'name', 'language', 'favorite'] as const
+    const currentIndex = modes.indexOf(this.sortBy)
+    const nextIndex = (currentIndex + 1) % modes.length
+    this.sortBy = modes[nextIndex] ?? 'lastModified'
+    this.refresh()
+  }
+
+  /**
+   * Get current sort mode
+   */
+  public getSortMode(): string {
+    switch (this.sortBy) {
+      case 'lastModified':
+        return 'Last modified'
+      case 'name':
+        return 'Name'
+      case 'language':
+        return 'Language'
+      case 'favorite':
+        return 'Favorites first'
+      default:
+        return 'Unknown'
+    }
+  }
+
   /**
    * Get tree item representation
    * @param element
@@ -179,6 +237,26 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
   }
 
   /**
+   * Get sort configuration based on current sort mode
+   */
+  private getSortConfig(): {
+    field: 'name' | 'language' | 'favorite' | 'updatedAt'
+    order: 'asc' | 'desc'
+  } {
+    switch (this.sortBy) {
+      case 'name':
+        return { field: 'name', order: 'asc' }
+      case 'language':
+        return { field: 'language', order: 'asc' }
+      case 'favorite':
+        return { field: 'favorite', order: 'desc' }
+      case 'lastModified':
+      default:
+        return { field: 'updatedAt', order: 'desc' }
+    }
+  }
+
+  /**
    * Get root level items
    */
   private getRootItems(): TreeItem[] {
@@ -186,9 +264,10 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
     if (this.isLoading) return [this.createLoadingItem()]
 
     // Get repositories, potentially filtered by active profile
+    const sortConfig = this.getSortConfig()
     const repositories = this.repositoryManager.getRepositories(
       this.currentFilter,
-      { field: 'name', order: 'asc' },
+      sortConfig,
     )
 
     console.warn('=== TREE DATA PROVIDER DEBUG ===')
@@ -196,7 +275,7 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
     console.warn(`Group by: ${this.groupBy}`)
     console.warn('Current filter:', this.currentFilter)
 
-    if (repositories.length === 0) return [this.createEmptyStateItem()]
+    if (repositories.length === 0) return this.createEmptyStateItem()
 
     if (this.groupBy === 'none') {
       const items = repositories.map((repo) => this.createRepositoryItem(repo))
@@ -285,8 +364,18 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
     // Check if repository is favorite
     const isFavorite = this.favoriteService.isFavorite(repository.path)
 
+    // Determine context value based on Git status and favorite status
+    let contextValue: string
+    if (repository.gitInfo.remoteUrl) {
+      // Git repository
+      contextValue = isFavorite ? 'repositoryFavorite' : 'repository'
+    } else {
+      // Non-Git folder
+      contextValue = isFavorite ? 'folderFavorite' : 'folder'
+    }
+
     // Set properties
-    item.contextValue = isFavorite ? 'repositoryFavorite' : 'repository'
+    item.contextValue = contextValue
     item.tooltip = this.getRepositoryTooltip(repository)
     item.iconPath = this.getRepositoryIcon(repository)
     item.description = this.getRepositoryDescription(repository)
@@ -314,8 +403,7 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
    * @param repository
    */
   private getRepositoryLabel(repository: Repository): string {
-    const isFavorite = this.favoriteService.isFavorite(repository.path)
-    return isFavorite ? `⭐ ${repository.name}` : repository.name
+    return repository.name
   }
 
   /**
@@ -375,8 +463,15 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
       timeStr = `${String(years)}y ago`
     }
 
-    // Highlight recent updates (within 1 week)
-    if (diffDays < daysPerWeek) timeStr = `🔥 ${timeStr}` // Fire emoji for recent updates
+    // Highlight recent updates based on configuration
+    const config = vscode.workspace.getConfiguration('reposManager')
+    const highlightDays = config.get<number>(
+      'display.highlightUpdatedWithinDays',
+      7,
+    )
+
+    if (highlightDays > 0 && diffDays < highlightDays)
+      timeStr = `Recent: ${timeStr}` // Recent updates indicator
 
     parts.push(timeStr)
 
@@ -384,116 +479,212 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
   }
 
   /**
-   * Get repository tooltip
+   * Get repository tooltip based on UI design specifications
    * @param repository
    */
   private getRepositoryTooltip(repository: Repository): string {
-    const lines: string[] = [
-      `Path: ${repository.path}`,
-      `Language: ${repository.metadata.language || 'Unknown'}`,
-      `Branch: ${repository.gitInfo.currentBranch}`,
-      `Last Commit: ${repository.gitInfo.lastCommitDate.toLocaleDateString()}`,
-    ]
+    const lines: string[] = []
 
-    if (repository.gitInfo.remoteUrl)
-      lines.push(`Remote: ${repository.gitInfo.remoteUrl}`)
-
-    if (repository.gitInfo.hasUncommitted) lines.push('Has uncommitted changes')
-
-    if (repository.tags.length > 0)
-      lines.push(`Tags: ${repository.tags.join(', ')}`)
+    this.addTooltipHeader(lines, repository)
+    this.addTooltipReadmeInfo(lines, repository)
+    this.addTooltipGitInfo(lines, repository)
+    this.addTooltipProjectSize(lines, repository)
+    this.addTooltipTechInfo(lines, repository)
+    this.addTooltipStatusInfo(lines, repository)
+    this.addTooltipQualityInfo(lines, repository)
+    this.addTooltipCommitInfo(lines, repository)
+    this.addTooltipQuickActions(lines, repository)
 
     return lines.join('\n')
   }
 
   /**
-   * Get repository icon
-   * @param repository
+   * Add header section to tooltip
+   */
+  private addTooltipHeader(lines: string[], repository: Repository): void {
+    const lastCommitDate = repository.gitInfo.lastCommitDate
+    const timeDiff = new Date().getTime() - lastCommitDate.getTime()
+    const daysDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24))
+    const timeStr =
+      daysDiff === 0
+        ? 'today'
+        : daysDiff === 1
+          ? '1 day ago'
+          : daysDiff < 7
+            ? `${String(daysDiff)} days ago`
+            : daysDiff < 30
+              ? `${String(Math.floor(daysDiff / 7))} weeks ago`
+              : daysDiff < 365
+                ? `${String(Math.floor(daysDiff / 30))} months ago`
+                : `${String(Math.floor(daysDiff / 365))} years ago`
+
+    const headerIcon = daysDiff < 7 ? '$(flame)' : '$(folder)'
+    lines.push(
+      `${headerIcon} ${repository.name}                           ${daysDiff < 7 ? '$(flame) ' : '$(calendar) '}${timeStr}`,
+    )
+    lines.push(repository.path)
+    lines.push('─'.repeat(65))
+  }
+
+  /**
+   * Add README info to tooltip
+   */
+  private addTooltipReadmeInfo(lines: string[], repository: Repository): void {
+    if (repository.metadata.readmeQuality.exists) {
+      lines.push(
+        `$(book) README: ${repository.displayName ?? 'Repository description'}`,
+      )
+    }
+  }
+
+  /**
+   * Add Git info to tooltip
+   */
+  private addTooltipGitInfo(lines: string[], repository: Repository): void {
+    const isGitRepository =
+      !!repository.gitInfo.remoteUrl || !!repository.gitInfo.currentBranch
+    if (isGitRepository) {
+      let gitStatus = `🌿 ${repository.gitInfo.currentBranch}`
+      if (repository.gitInfo.hasUncommitted)
+        gitStatus += ' *uncommitted changes'
+      if (repository.gitInfo.aheadBehind.ahead > 0)
+        gitStatus += ` *${String(repository.gitInfo.aheadBehind.ahead)} commits ahead`
+      lines.push(gitStatus)
+    }
+  }
+
+  /**
+   * Add project size info to tooltip
+   */
+  private addTooltipProjectSize(lines: string[], repository: Repository): void {
+    const size = repository.metadata.projectSize
+    lines.push(
+      `📊 ${String(size.totalFiles)} files • ${String(size.codeFiles)} code files • ${this.formatFileSize(size.codeSize)}`,
+    )
+    lines.push('─'.repeat(65))
+  }
+
+  /**
+   * Add technology info to tooltip
+   */
+  private addTooltipTechInfo(lines: string[], repository: Repository): void {
+    const techInfo: string[] = []
+    if (repository.metadata.language)
+      techInfo.push(repository.metadata.language)
+    if (repository.metadata.runtime) techInfo.push(repository.metadata.runtime)
+    if (repository.metadata.license)
+      techInfo.push(`${repository.metadata.license} License`)
+
+    if (techInfo.length > 0) lines.push(`$(tag) ${techInfo.join('  ')}`)
+  }
+
+  /**
+   * Add status info to tooltip
+   */
+  private addTooltipStatusInfo(lines: string[], repository: Repository): void {
+    const statusInfo: string[] = []
+    if (this.favoriteService.isFavorite(repository.path))
+      statusInfo.push('$(star-full) In Favorites')
+    if (repository.gitInfo.remoteUrl)
+      statusInfo.push('$(link) GitHub Repository')
+    else statusInfo.push('$(folder) Local Folder (Non-Git)')
+
+    if (statusInfo.length > 0) lines.push(statusInfo.join(' • '))
+    lines.push('─'.repeat(65))
+  }
+
+  /**
+   * Add quality info to tooltip
+   */
+  private addTooltipQualityInfo(lines: string[], repository: Repository): void {
+    const qualityInfo: string[] = []
+    if (repository.metadata.hasTests) qualityInfo.push('npm test ✅')
+    if (repository.metadata.hasCicd) qualityInfo.push('CI/CD ✅')
+    if (repository.metadata.dependencies.length > 0) {
+      qualityInfo.push(
+        `Dependencies 📦 ${String(repository.metadata.dependencies.length)} packages`,
+      )
+    }
+
+    if (qualityInfo.length > 0) lines.push(`🔧 ${qualityInfo.join(' • ')}`)
+  }
+
+  /**
+   * Add commit info to tooltip
+   */
+  private addTooltipCommitInfo(lines: string[], repository: Repository): void {
+    lines.push(
+      `$(calendar) Last commit: ${repository.gitInfo.lastCommitDate.toLocaleDateString()}`,
+    )
+    lines.push('─'.repeat(65))
+  }
+
+  /**
+   * Add quick actions to tooltip
+   */
+  private addTooltipQuickActions(
+    lines: string[],
+    repository: Repository,
+  ): void {
+    const quickActions: string[] = []
+    if (repository.gitInfo.remoteUrl)
+      quickActions.push('[$(globe) Open Homepage]')
+    quickActions.push('[$(folder) Explorer]')
+    quickActions.push('[$(terminal) Terminal]')
+    quickActions.push('[$(sync) Update]')
+
+    lines.push(quickActions.join(' '))
+  }
+
+  /**
+   * Format file size in human readable format
+   */
+  private formatFileSize(bytes: number): string {
+    if (bytes === 0) return '0 B'
+
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    const size = sizes[i]
+
+    if (!size) return `${String(bytes)} B`
+
+    return `${String(parseFloat((bytes / Math.pow(k, i)).toFixed(1)))} ${size}`
+  }
+
+  /**
+   * Get repository icon based on type and favorite status (UI design compliant)
    */
   private getRepositoryIcon(repository: Repository): vscode.ThemeIcon {
-    // Language-specific icons with better variety
-    const language = repository.metadata.language.toLowerCase()
-    const iconMap: Record<string, { icon: string; color?: string }> = {
-      // Web technologies
-      javascript: { icon: 'symbol-method', color: 'charts.yellow' },
-      typescript: { icon: 'symbol-interface', color: 'charts.blue' },
-      html: { icon: 'symbol-tag', color: 'charts.orange' },
-      css: { icon: 'symbol-color', color: 'charts.purple' },
-      scss: { icon: 'symbol-color', color: 'charts.purple' },
-      sass: { icon: 'symbol-color', color: 'charts.purple' },
-      vue: { icon: 'symbol-class', color: 'charts.green' },
-      react: { icon: 'symbol-module', color: 'charts.blue' },
-      angular: { icon: 'symbol-module', color: 'charts.red' },
-      svelte: { icon: 'symbol-module', color: 'charts.orange' },
+    const isFavorite = this.favoriteService.isFavorite(repository.path)
+    const isGitRepository =
+      !!repository.gitInfo.remoteUrl || !!repository.gitInfo.currentBranch
 
-      // Backend languages
-      python: { icon: 'symbol-snake', color: 'charts.green' },
-      java: { icon: 'symbol-class', color: 'charts.orange' },
-      csharp: { icon: 'symbol-class', color: 'charts.purple' },
-      'c#': { icon: 'symbol-class', color: 'charts.purple' },
-      cpp: { icon: 'symbol-struct', color: 'charts.blue' },
-      'c++': { icon: 'symbol-struct', color: 'charts.blue' },
-      c: { icon: 'symbol-struct', color: 'charts.blue' },
-      php: { icon: 'symbol-variable', color: 'charts.purple' },
-      ruby: { icon: 'symbol-property', color: 'charts.red' },
-      go: { icon: 'symbol-function', color: 'charts.blue' },
-      rust: { icon: 'symbol-operator', color: 'charts.orange' },
-      swift: { icon: 'symbol-event', color: 'charts.orange' },
-      kotlin: { icon: 'symbol-class', color: 'charts.purple' },
-      scala: { icon: 'symbol-class', color: 'charts.red' },
-
-      // Scripting and config
-      shell: { icon: 'terminal', color: 'terminal.foreground' },
-      bash: { icon: 'terminal', color: 'terminal.foreground' },
-      powershell: { icon: 'terminal', color: 'charts.blue' },
-      dockerfile: { icon: 'symbol-package', color: 'charts.blue' },
-      yaml: { icon: 'symbol-file', color: 'charts.gray' },
-      yml: { icon: 'symbol-file', color: 'charts.gray' },
-      json: { icon: 'symbol-object', color: 'charts.yellow' },
-      xml: { icon: 'symbol-tag', color: 'charts.orange' },
-
-      // Mobile
-      dart: { icon: 'symbol-misc', color: 'charts.blue' },
-
-      // Data and ML
-      r: { icon: 'graph', color: 'charts.blue' },
-      matlab: { icon: 'graph', color: 'charts.orange' },
-
-      // Other
-      markdown: { icon: 'markdown', color: 'charts.gray' },
-      text: { icon: 'symbol-text', color: 'charts.gray' },
-    }
-
-    const iconConfig =
-      language && iconMap[language]
-        ? iconMap[language]
-        : { icon: 'repo', color: undefined }
-
-    // Create base icon
-    let icon: vscode.ThemeIcon
-    if (iconConfig.color) {
-      icon = new vscode.ThemeIcon(
-        iconConfig.icon,
-        new vscode.ThemeColor(iconConfig.color),
+    // For favorites, use star icon as per UI design
+    if (isFavorite) {
+      return new vscode.ThemeIcon(
+        'star-full',
+        new vscode.ThemeColor('charts.yellow'),
       )
-    } else {
-      icon = new vscode.ThemeIcon(iconConfig.icon)
     }
 
-    // Add git status indicator color
+    // For non-Git folders, use folder icon
+    if (!isGitRepository) return new vscode.ThemeIcon('folder')
+
+    // For Git repositories, use source-repository icon
+    // Add git status indicator color for uncommitted changes
     if (repository.gitInfo.hasUncommitted) {
       return new vscode.ThemeIcon(
-        iconConfig.icon,
+        'source-repository',
         new vscode.ThemeColor('gitDecoration.modifiedResourceForeground'),
       )
     }
 
-    return icon
+    return new vscode.ThemeIcon('source-repository')
   }
 
   /**
    * Get group icon
-   * @param groupName
    */
   private getGroupIcon(groupName: string): vscode.ThemeIcon {
     if (groupName === 'Favorites') {
@@ -510,22 +701,13 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
       python: { icon: 'symbol-snake', color: 'charts.green' },
       java: { icon: 'symbol-class', color: 'charts.orange' },
       csharp: { icon: 'symbol-class', color: 'charts.purple' },
-      'c#': { icon: 'symbol-class', color: 'charts.purple' },
-      react: { icon: 'symbol-module', color: 'charts.blue' },
-      vue: { icon: 'symbol-class', color: 'charts.green' },
-      angular: { icon: 'symbol-module', color: 'charts.red' },
-      go: { icon: 'symbol-function', color: 'charts.blue' },
-      rust: { icon: 'symbol-operator', color: 'charts.orange' },
-      php: { icon: 'symbol-variable', color: 'charts.purple' },
-      ruby: { icon: 'symbol-property', color: 'charts.red' },
     }
 
-    const lowerGroupName = groupName.toLowerCase()
-    if (languageIcons[lowerGroupName]) {
-      const config = languageIcons[lowerGroupName]
+    const iconConfig = languageIcons[groupName.toLowerCase()]
+    if (iconConfig) {
       return new vscode.ThemeIcon(
-        config.icon,
-        new vscode.ThemeColor(config.color),
+        iconConfig.icon,
+        new vscode.ThemeColor(iconConfig.color),
       )
     }
 
@@ -534,50 +716,82 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
   }
 
   /**
-   * Create loading item with spinning animation
+   * Create loading item
    */
   private createLoadingItem(): TreeItem {
     const loadingItem = new TreeItem(
-      '$(sync~spin) Scanning repositories...',
+      'Scanning repositories...',
       vscode.TreeItemCollapsibleState.None,
     )
     loadingItem.contextValue = 'loading'
-    loadingItem.tooltip =
-      'Analyzing directory structure and Git repositories...'
-    loadingItem.description = '$(loading~spin) Please wait...'
     loadingItem.iconPath = new vscode.ThemeIcon(
       'sync~spin',
       new vscode.ThemeColor('progressBar.background'),
     )
+    loadingItem.tooltip =
+      'Scanning for Git repositories and analyzing project metadata...'
 
     return loadingItem
   }
 
   /**
-   * Create empty state item when no repositories found
+   * Create empty state items
    */
-  private createEmptyStateItem(): TreeItem {
+  private createEmptyStateItem(): TreeItem[] {
     const emptyItem = new TreeItem(
-      '$(folder) No repositories found',
+      'No repositories found',
       vscode.TreeItemCollapsibleState.None,
     )
     emptyItem.contextValue = 'empty'
-    emptyItem.tooltip =
-      'No Git repositories found in your workspace folders.\nTry adding a folder or refresh to scan again.'
     emptyItem.description = 'Add folders to get started'
     emptyItem.iconPath = new vscode.ThemeIcon(
-      'folder-opened',
-      new vscode.ThemeColor('disabledForeground'),
+      'folder',
+      new vscode.ThemeColor('descriptionForeground'),
     )
+    emptyItem.tooltip =
+      'No Git repositories found in your workspace folders.\nTry adding a folder or refresh to scan again.'
 
-    return emptyItem
+    // Auto-detect paths button
+    const autoDetectItem = new TreeItem(
+      'Auto-detect Paths',
+      vscode.TreeItemCollapsibleState.None,
+    )
+    autoDetectItem.command = {
+      command: 'reposManager.autoDetectPaths',
+      title: 'Auto-detect Paths',
+    }
+    autoDetectItem.contextValue = 'autoDetect'
+    autoDetectItem.iconPath = new vscode.ThemeIcon('search')
+    autoDetectItem.tooltip = 'Automatically detect Git repository paths'
+
+    // Add folder button
+    const addFolderItem = new TreeItem(
+      'Add Folder',
+      vscode.TreeItemCollapsibleState.None,
+    )
+    addFolderItem.command = {
+      command: 'reposManager.addFolder',
+      title: 'Add Folder',
+    }
+    addFolderItem.contextValue = 'addFolder'
+    addFolderItem.iconPath = new vscode.ThemeIcon('folder-opened')
+    addFolderItem.tooltip = 'Add a folder to workspace'
+
+    // Settings button
+    const settingsItem = new TreeItem(
+      'Settings',
+      vscode.TreeItemCollapsibleState.None,
+    )
+    settingsItem.command = {
+      command: 'reposManager.openSettings',
+      title: 'Settings',
+    }
+    settingsItem.contextValue = 'settings'
+    settingsItem.iconPath = new vscode.ThemeIcon('settings-gear')
+    settingsItem.tooltip = 'Configure repository scanner settings'
+
+    return [emptyItem, autoDetectItem, addFolderItem, settingsItem]
   }
-
-  /**
-   * Apply filter profile to repositories
-   * @param repositories
-   * @param profile
-   */
 }
 
 /**

@@ -448,3 +448,37 @@ export interface CustomCondition {
   readonly value: string | number | boolean
   readonly caseSensitive?: boolean
 }
+
+export interface RepositoryCache {
+  readonly version: string
+  readonly timestamp: number
+  readonly targetDirectories: readonly string[]
+  readonly repositories: readonly CachedRepository[]
+}
+
+export interface CachedRepository extends Repository {
+  readonly cacheTimestamp: number
+  readonly directoryLastModified: number
+}
+
+export interface ScanStrategy {
+  readonly useCache: boolean
+  readonly backgroundScan: boolean
+  readonly cacheMaxAge: number
+  readonly incrementalScan: boolean
+}
+
+export interface EmptyStateAction {
+  readonly id: string
+  readonly label: string
+  readonly icon: string
+  readonly tooltip: string
+  readonly command: string
+}
+
+export interface PathDetectionResult {
+  readonly path: string
+  readonly hasRepositories: boolean
+  readonly repositoryCount: number
+  readonly folderCount: number
+}

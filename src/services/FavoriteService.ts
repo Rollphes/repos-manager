@@ -12,10 +12,7 @@ export class FavoriteService {
   public readonly onDidChangeFavoritesEvent = this.onDidChangeFavorites.event
 
   constructor(private readonly context?: vscode.ExtensionContext) {
-    console.warn(
-      '🔥 [FavoriteService] Initializing with context:',
-      !!this.context,
-    )
+    console.warn('[FavoriteService] Initializing with context:', !!this.context)
     this.loadFavorites()
   }
 

@@ -76,6 +76,41 @@
                 "command": "reposManager.openInFileExplorer",
                 "title": "Reveal in File Explorer",
                 "icon": "$(folder-opened)"
+            },
+            {
+                "command": "reposManager.autoDetectPaths",
+                "title": "Auto-detect Paths",
+                "icon": "$(search)"
+            },
+            {
+                "command": "reposManager.addFolder",
+                "title": "Add Folder",
+                "icon": "$(folder-opened)"
+            },
+            {
+                "command": "reposManager.openSettings",
+                "title": "Open Settings",
+                "icon": "$(settings-gear)"
+            },
+            {
+                "command": "reposManager.search",
+                "title": "Search and Filter",
+                "icon": "$(search)"
+            },
+            {
+                "command": "reposManager.toggleGroupView",
+                "title": "Toggle Group View",
+                "icon": "$(list-flat)"
+            },
+            {
+                "command": "reposManager.toggleSort",
+                "title": "Change Sort Order",
+                "icon": "$(sort-precedence)"
+            },
+            {
+                "command": "reposManager.openHomepage",
+                "title": "Open Repository Homepage",
+                "icon": "$(globe)"
             }
         ],
         "menus": {
@@ -84,38 +119,63 @@
                     "command": "reposManager.refresh",
                     "when": "view == reposManager",
                     "group": "navigation@1"
+                },
+                {
+                    "command": "reposManager.search",
+                    "when": "view == reposManager",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "reposManager.toggleGroupView",
+                    "when": "view == reposManager",
+                    "group": "navigation@3"
+                },
+                {
+                    "command": "reposManager.toggleSort",
+                    "when": "view == reposManager",
+                    "group": "navigation@4"
+                },
+                {
+                    "command": "reposManager.openSettings",
+                    "when": "view == reposManager",
+                    "group": "navigation@5"
                 }
             ],
             "view/item/context": [
                 {
                     "command": "reposManager.openRepository",
-                    "when": "view == reposManager && (viewItem == repository || viewItem == repositoryFavorite)",
+                    "when": "view == reposManager && (viewItem == repository || viewItem == repositoryFavorite || viewItem == folder || viewItem == folderFavorite)",
                     "group": "navigation@1"
                 },
                 {
                     "command": "reposManager.openInNewWindow",
-                    "when": "view == reposManager && (viewItem == repository || viewItem == repositoryFavorite)",
+                    "when": "view == reposManager && (viewItem == repository || viewItem == repositoryFavorite || viewItem == folder || viewItem == folderFavorite)",
                     "group": "navigation@2"
                 },
                 {
+                    "command": "reposManager.openHomepage",
+                    "when": "view == reposManager && (viewItem == repository || viewItem == repositoryFavorite)",
+                    "group": "favorites@1"
+                },
+                {
                     "command": "reposManager.addToFavorites",
-                    "when": "view == reposManager && viewItem == repository",
-                    "group": "navigation@3"
+                    "when": "view == reposManager && (viewItem == repository || viewItem == folder)",
+                    "group": "favorites@2"
                 },
                 {
                     "command": "reposManager.removeFromFavorites",
-                    "when": "view == reposManager && viewItem == repositoryFavorite",
-                    "group": "navigation@3"
+                    "when": "view == reposManager && (viewItem == repositoryFavorite || viewItem == folderFavorite)",
+                    "group": "favorites@2"
                 },
                 {
                     "command": "reposManager.openInTerminal",
-                    "when": "view == reposManager && (viewItem == repository || viewItem == repositoryFavorite)",
-                    "group": "navigation@4"
+                    "when": "view == reposManager && (viewItem == repository || viewItem == repositoryFavorite || viewItem == folder || viewItem == folderFavorite)",
+                    "group": "actions@1"
                 },
                 {
                     "command": "reposManager.openInFileExplorer",
-                    "when": "view == reposManager && (viewItem == repository || viewItem == repositoryFavorite)",
-                    "group": "navigation@5"
+                    "when": "view == reposManager && (viewItem == repository || viewItem == repositoryFavorite || viewItem == folder || viewItem == folderFavorite)",
+                    "group": "actions@2"
                 }
             ]
         },
@@ -150,6 +210,54 @@
                     "default": 7,
                     "minimum": 0,
                     "description": "Repositories updated within this number of days will be highlighted. Set to 0 to disable."
+                },
+                "reposManager.scan.autoDetectPaths": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [
+                        "~/Documents/GitHub",
+                        "~/Documents/github",
+                        "~/Projects",
+                        "~/workspace",
+                        "~/dev",
+                        "~/code"
+                    ],
+                    "description": "Paths to automatically detect when Auto-detect Paths is triggered."
+                },
+                "reposManager.cache.enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable caching of repository scan results for faster startup."
+                },
+                "reposManager.cache.maxAge": {
+                    "type": "number",
+                    "default": 86400,
+                    "minimum": 300,
+                    "description": "Maximum age of cache entries in seconds (default: 24 hours)."
+                },
+                "reposManager.cache.backgroundScan": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable background scanning to update cache after initial display."
+                },
+                "reposManager.cache.cleanupOnStartup": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically clean up expired cache entries on startup."
+                },
+                "reposManager.performance.parallelScan": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable parallel scanning of multiple repositories for better performance."
+                },
+                "reposManager.performance.maxConcurrency": {
+                    "type": "number",
+                    "default": 5,
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": "Maximum number of repositories to scan concurrently."
                 }
             }
         }

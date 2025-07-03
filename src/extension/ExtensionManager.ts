@@ -4,6 +4,7 @@ import { DialogProvider } from '@extension/DialogProvider'
 import { ProgressManager } from '@extension/ProgressManager'
 import { ConfigurationService } from '@services/ConfigurationService'
 import { FavoriteService } from '@services/FavoriteService'
+import { PathDetectionService } from '@services/PathDetectionService'
 import { ReposManagerProvider } from '@ui/ReposManagerProvider'
 import * as vscode from 'vscode'
 
@@ -76,6 +77,16 @@ export class ExtensionManager {
       throw new Error('Favorite service not initialized')
 
     return this.favoriteService
+  }
+
+  /**
+   * Get path detection service instance
+   */
+  public getPathDetectionService(): PathDetectionService {
+    if (!this.repositoryManager)
+      throw new Error('Repository manager not initialized')
+
+    return this.repositoryManager.getPathDetectionService()
   }
 
   /**
