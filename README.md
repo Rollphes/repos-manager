@@ -2,6 +2,10 @@
 
 A powerful VS Code extension for managing and organizing your Git repositories with intelligent analysis and intuitive UI.
 
+> [!TIP]
+> This repository was created with the Github Copilot Agent, but has been archived because of implementation limitations.
+> If I can figure out what else I want to implement, I will rebuild it from scratch and implement it manually.
+
 ## ✨ Features
 
 ### 🔍 Smart Repository Discovery
