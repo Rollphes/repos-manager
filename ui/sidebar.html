@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Repos Manager - Sidebar</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="sidebar-container">
+      <div class="view-header">
+        <h2 class="view-title">REPOS MANAGER</h2>
+        <button class="icon-button">
+          <i class="material-icons">refresh</i>
+        </button>
+      </div>
+      <div class="tree-view">
+        <div class="tree-group">
+          <div class="group-header">
+            <i class="material-icons">expand_more</i>
+            <h3>FAVORITES (2)</h3>
+          </div>
+          <ul class="tree-items">
+            <li class="tree-item favorite">
+              <div class="item-content">
+                <i class="material-icons">star</i>
+                <span class="item-label">repos-manager</span>
+                <i class="material-icons hot">whatshot</i>
+              </div>
+              <div class="item-actions">
+                <button class="icon-button" title="Open in New Window">
+                  <i class="material-icons">open_in_new</i>
+                </button>
+                <button class="icon-button" title="Reveal in File Explorer">
+                  <i class="material-icons">folder_open</i>
+                </button>
+                <button class="icon-button" title="Open in Terminal">
+                  <i class="material-icons">terminal</i>
+                </button>
+              </div>
+              <div class="tooltip">
+                <div class="tooltip-content">
+                  <div class="tooltip-header">
+                    <strong>repos-manager</strong>
+                    <span class="update-time">3 days ago</span>
+                  </div>
+                  <p class="tooltip-description">README: Advanced repository management for VS Code...</p>
+                  <div class="language-tags">
+                    <span class="language-tag">TypeScript</span>
+                  </div>
+                  <div class="tech-stack-badges">
+                      <img src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white&style=flat-square" alt="TypeScript">
+                      <img src="https://img.shields.io/badge/Node.js-339933?logo=nodedotjs&logoColor=white&style=flat-square" alt="Node.js">
+                  </div>
+                </div>
+              </div>
+            </li>
+            <li class="tree-item favorite">
+              <div class="item-content">
+                 <i class="material-icons">star</i>
+                 <span class="item-label">my-awesome-app</span>
+              </div>
+              <div class="item-actions">
+                <button class="icon-button" title="Open in New Window">
+                  <i class="material-icons">open_in_new</i>
+                </button>
+                <button class="icon-button" title="Reveal in File Explorer">
+                  <i class="material-icons">folder_open</i>
+                </button>
+                <button class="icon-button" title="Open in Terminal">
+                  <i class="material-icons">terminal</i>
+                </button>
+              </div>
+               <div class="tooltip">
+                <div class="tooltip-content">
+                  <div class="tooltip-header">
+                    <strong>my-awesome-app</strong>
+                    <span class="update-time">1 month ago</span>
+                  </div>
+                  <p class="tooltip-description">README: A very awesome app...</p>
+                  <div class="language-tags">
+                     <span class="language-tag">Python</span>
+                  </div>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </div>
+        <div class="tree-group">
+          <div class="group-header">
+            <i class="material-icons">expand_more</i>
+            <h3>REPOSITORIES (3)</h3>
+          </div>
+          <ul class="tree-items">
+          <li class="tree-item git-repo modified">
+            <div class="item-content">
+              <i class="material-icons">folder_special</i>
+              <span class="item-label">repos-manager</span>
+              <i class="material-icons hot">whatshot</i>
+            </div>
+            <div class="item-actions">
+                <button class="icon-button" title="Open in New Window">
+                  <i class="material-icons">open_in_new</i>
+                </button>
+                <button class="icon-button" title="Reveal in File Explorer">
+                  <i class="material-icons">folder_open</i>
+                </button>
+                <button class="icon-button" title="Open in Terminal">
+                  <i class="material-icons">terminal</i>
+                </button>
+                <button class="icon-button" title="Open on GitHub">
+                  <i class="material-icons">code</i>
+                </button>
+            </div>
+            <div class="tooltip">
+              <div class="tooltip-content">
+                <div class="tooltip-header">
+                  <strong>repos-manager</strong>
+                  <span class="update-time">3 days ago</span>
+                </div>
+                <p class="tooltip-description">README: Advanced repository management for VS Code...</p>
+                <div class="language-tags">
+                  <span class="language-tag">TypeScript</span>
+                </div>
+                <div class="tech-stack-badges">
+                    <img src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white&style=flat-square" alt="TypeScript">
+                    <img src="https://img.shields.io/badge/Node.js-339933?logo=nodedotjs&logoColor=white&style=flat-square" alt="Node.js">
+                </div>
+              </div>
+            </div>
+          </li>
+          <li class="tree-item git-repo">
+            <div class="item-content">
+              <i class="material-icons">folder_special</i>
+              <span class="item-label">my-awesome-app</span>
+            </div>
+               <div class="item-details">
+                <span class="language-tag">Python</span>
+                <span class="update-time">1 month ago</span>
+              </div>
+            </div>
+            <div class="item-actions">
+                <button class="icon-button" title="Open in New Window">
+                  <i class="material-icons">open_in_new</i>
+                </button>
+                <button class="icon-button" title="Reveal in File Explorer">
+                  <i class="material-icons">folder_open</i>
+                </button>
+                <button class="icon-button" title="Open in Terminal">
+                  <i class="material-icons">terminal</i>
+                </button>
+            </div>
+          </li>
+          <li class="tree-item" title="A folder with some project files.">
+            <div class="item-content">
+              <div class="item-line-1">
+                <i class="material-icons">folder</i>
+                <span class="item-label">non-git-project</span>
+              </div>
+              <div class="item-details">
+                <span class="update-time">5 hours ago</span>
+              </div>
+            </div>
+            <div class="item-actions">
+                <button class="icon-button" title="Open in New Window">
+                  <i class="material-icons">open_in_new</i>
+                </button>
+                <button class="icon-button" title="Reveal in File Explorer">
+                  <i class="material-icons">folder_open</i>
+                </button>
+                <button class="icon-button" title="Open in Terminal">
+                  <i class="material-icons">terminal</i>
+                </button>
+            </div>
+          </li>
+        </ul>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

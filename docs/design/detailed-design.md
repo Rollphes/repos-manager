@@ -1,736 +1,888 @@
 # Repos-Manager 詳細設計書
 
-## システム構成
+## 1. システム構成
 
-### アーキテクチャ概要
+### 1.1. アーキテクチャ概要
 
-```text
-┌─────────────────────────────────────────┐
-│              VS Code Extension          │
-├─────────────────────────────────────────┤
-│  Presentation Layer (UI)                │
-│  ├─ TreeDataProvider (サイドバー)       │
-│  ├─ WebviewProvider (設定画面)          │
-│  └─ CommandProvider (コマンド)          │
-├─────────────────────────────────────────┤
-│  Business Logic Layer                   │
-│  ├─ RepositoryManager                   │
-│  ├─ AnalysisEngine                      │
-│  ├─ SearchEngine                        │
-│  └─ FilterProfileManager                │
-├─────────────────────────────────────────┤
-│  Data Access Layer                      │
-│  ├─ FileSystemService                   │
-│  ├─ GitService                          │
-│  ├─ CacheService                        │
-│  └─ ConfigService                       │
-├─────────────────────────────────────────┤
-│  External Services                      │
-│  ├─ GitHub API                          │
-│  ├─ GitLab API                          │
-│  └─ VS Code APIs                        │
-└─────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph "Presentation Layer (UI)"
+        A[ReposManagerProvider] --> B(VS Code TreeView)
+        C[CommandRegistry] --> D(VS Code Commands)
+        E[DialogProvider] --> F(VS Code UI)
+    end
+
+    subgraph "Business Logic Layer"
+        G[ExtensionManager]
+        H[RepositoryManager]
+        I[RepositoryAnalyzer]
+        J[FavoriteService]
+        O[CacheService]
+    end
+
+    subgraph "Data Access Layer"
+        K[ConfigurationService]
+        L[GitService]
+    end
+
+    subgraph "VS Code & External"
+        M[VS Code API]
+        N[Node.js APIs]
+        P[File System Cache]
+    end
+
+    G --> H
+    G --> I
+    G --> J
+    G --> K
+    G --> L
+    G --> C
+    G --> E
+    G --> O
+
+    H --> L
+    H --> I
+    H --> O
+    I --> L
+    O --> P
+
+    A --> H
+    A --> J
+    A --> K
+
+    C --> G
+    E --> G
+
+    K -- Reads/Writes --> M
+    L -- Interacts with --> N
 ```
 
-## 主要コンポーネント設計
+### 1.2. 主要コンポーネントの責務
 
-### 1. RepositoryManager
+- **ExtensionManager**: 拡張機能全体のライフサイクルを管理する中心的なクラス。各サービスの初期化、コマンドの登録、イベントリスナーの設定などを行う。
+- **ReposManagerProvider**: サイドバーのツリービューに表示するリポジトリのリストを管理し、UIを更新する。空状態時のユーザー支援UIも担当。
+- **RepositoryManager**: ローカルのリポジトリ（Git管理内外問わず）をスキャンし、リストを管理する。キャッシュからの高速読み込みと背景スキャンを担当。
+- **RepositoryAnalyzer**: 個々のリポジトリの内容を分析し、主要言語や最終更新日などのメタデータを抽出する。
+- **GitService**: Gitコマンドを実行し、ブランチ情報や変更状態などを取得する。
+- **ConfigurationService**: VS Codeの設定（`settings.json`）の読み書きを行う。自動検知パスの管理も担当。
+- **FavoriteService**: お気に入りのリポジトリの状態を管理する。
+- **CommandRegistry**: 拡張機能のコマンドを登録し、実行ロジックを紐付ける。
+- **DialogProvider**: ユーザーへの情報表示（情報、警告、エラーメッセージ）や入力（QuickPick）を管理する。
+- **PathDetectionService**: 一般的なリポジトリ保存場所の自動検知機能を提供する。
+- **CacheService**: リポジトリスキャン結果のキャッシュ管理。起動パフォーマンス向上と差分更新を担当。
 
-**責務**: リポジトリの検知、登録、管理
+## 2. データモデル (TypeScript Interfaces)
 
-```typescript
-interface RepositoryManager {
-  scanRepositories(rootPaths: string[]): Promise<Repository[]>
-  addRepository(path: string): Promise<Repository>
-  removeRepository(id: string): Promise<void>
-  updateRepository(id: string): Promise<Repository>
-  getRepositories(): Repository[]
-  refreshRepository(id: string): Promise<Repository>
-  bulkUpdate(ids: string[]): Promise<Repository[]>
-}
+### 2.1. `Repository`
 
-interface Repository {
-  id: string
-  name: string
-  path: string
-  language: string
-  lastModified: Date
-  gitInfo: GitInfo
-  metadata: RepositoryMetadata
-  tags: string[]
-  isFavorite: boolean
-  isArchived: boolean
-}
-```
-
-### 2. AnalysisEngine
-
-**責務**: リポジトリの分析・メタデータ抽出
+リポジトリまたは管理対象フォルダの情報を保持する中心的なデータ構造。
 
 ```typescript
-interface AnalysisEngine {
-  analyzeRepository(path: string, options?: AnalysisOptions): Promise<RepositoryMetadata>
-  detectLanguage(path: string): Promise<LanguageInfo>
-  extractDependencies(path: string): Promise<Dependency[]>
-  calculateProjectSize(path: string): Promise<ProjectSize>
-  assessReadmeQuality(readmePath: string): Promise<ReadmeQuality>
-  detectRuntime(path: string): Promise<RuntimeInfo>
-  detectDatabases(path: string): Promise<DatabaseInfo[]>
-  checkTestCoverage(path: string): Promise<TestInfo>
-  detectCICD(path: string): Promise<CICDInfo>
-  analyzeLicense(path: string): Promise<LicenseInfo>
+// src/types/index.ts
+
+/**
+ * 管理対象のリポジトリまたはフォルダを表すインターフェース
+ */
+export interface Repository {
+  id: string; // パスから生成された一意のID
+  name: string; // フォルダ名
+  path: string; // フルパス
+  isGit: boolean; // Gitリポジトリであるか
+  gitInfo?: GitInfo; // Gitリポジトリの場合の情報
+  mainLanguage?: string; // 主要言語
+  lastModified: number; // 最終更新日時 (Unixタイムスタンプ)
+  isFavorite: boolean; // お気に入り登録されているか
 }
 
-interface RepositoryMetadata {
-  language: LanguageInfo
-  runtime?: RuntimeInfo
-  databases: DatabaseInfo[]
-  dependencies: Dependency[]
-  projectSize: ProjectSize
-  readmeQuality: ReadmeQuality
-  testInfo: TestInfo
-  cicdInfo: CICDInfo
-  license?: LicenseInfo
-  lastAnalyzed: Date
-}
-
-interface AnalysisOptions {
-  lightweight?: boolean  // 軽量スキャンモード
-  timeout?: number      // タイムアウト（秒）
-  maxFiles?: number     // 最大ファイル数
-}
-```
-
-### 3. SearchEngine
-
-**責務**: 検索・フィルタリング機能
-
-```typescript
-interface SearchEngine {
-  search(query: SearchQuery): Promise<SearchResult>
-  filter(repositories: Repository[], filters: FilterCriteria): Repository[]
-  saveSearchFilter(name: string, filter: FilterCriteria): Promise<void>
-  getSearchHistory(): SearchQuery[]
-  getSavedFilters(): SavedFilter[]
-  clearHistory(): Promise<void>
-}
-
-interface SearchQuery {
-  keyword: string
-  type: 'name' | 'file' | 'techstack' | 'tag'
-  filters: FilterCriteria
-  options: SearchOptions
-}
-
-interface SearchResult {
-  repositories: Repository[]
-  totalCount: number
-  searchTime: number
-  suggestions?: string[]
-}
-
-interface FilterCriteria {
-  languages?: string[]
-  owners?: ('self' | 'other')[]
-  gitStatus?: ('clean' | 'modified' | 'ahead' | 'behind')[]
-  dateRange?: DateRange
-  sizeRange?: SizeRange
-  tags?: string[]
-  favorites?: boolean
-  archived?: boolean
+/**
+ * Gitリポジトリに関する情報
+ */
+export interface GitInfo {
+  currentBranch: string;
+  hasUncommittedChanges: boolean;
+  lastCommitDate?: Date;
 }
 ```
 
-### 4. FilterProfileManager
+### 2.2. `ExtensionConfig`
 
-**責務**: フィルタープロファイル管理
-
-```typescript
-interface FilterProfileManager {
-  createProfile(name: string, filters: FilterCriteria, options?: ProfileOptions): Promise<FilterProfile>
-  updateProfile(id: string, updates: Partial<FilterProfile>): Promise<FilterProfile>
-  deleteProfile(id: string): Promise<void>
-  getProfiles(): FilterProfile[]
-  applyProfile(id: string): Promise<Repository[]>
-  getCurrentProfile(): FilterProfile | null
-  exportProfile(id: string): Promise<FilterProfileExport>
-  importProfile(data: FilterProfileExport): Promise<FilterProfile>
-  getProfileStatistics(id: string): Promise<ProfileStats>
-}
-
-interface FilterProfile {
-  id: string
-  name: string
-  description?: string
-  filters: FilterCriteria
-  isActive: boolean
-  createdAt: Date
-  updatedAt: Date
-  icon?: string
-  color?: string
-  tags: string[]
-}
-
-interface ProfileStats {
-  totalRepositories: number
-  languageDistribution: Record<string, number>
-  lastActivity: Date
-  averageHealth: number
-}
-
-interface FilterProfileExport {
-  version: string
-  profile: Omit<FilterProfile, 'id' | 'createdAt' | 'updatedAt' | 'isActive'>
-  metadata: {
-    exportedBy: string
-    exportedAt: Date
-    compatibilityVersion: string
-  }
-}
-```
-
-### 5. GitService
-
-**責務**: Git操作とリモート連携
+`settings.json` から読み込む拡張機能の設定。
 
 ```typescript
-interface GitService {
-  getGitInfo(repoPath: string): Promise<GitInfo>
-  checkRemoteStatus(repoPath: string): Promise<RemoteStatus>
-  getBranches(repoPath: string): Promise<BranchInfo[]>
-  getCommitHistory(repoPath: string, limit?: number): Promise<CommitInfo[]>
-  hasUncommittedChanges(repoPath: string): Promise<boolean>
-  getRemoteUrl(repoPath: string): Promise<string | null>
-  isGitRepository(path: string): Promise<boolean>
-}
+// src/types/index.ts
 
-interface GitInfo {
-  currentBranch: string
-  totalBranches: number
-  lastCommitDate: Date
-  lastCommitMessage: string
-  lastCommitAuthor: string
-  hasUncommitted: boolean
-  remoteStatus: RemoteStatus
-  remoteUrl?: string
-  isFork: boolean
-  owner: 'self' | 'other'
-}
-
-interface RemoteStatus {
-  ahead: number
-  behind: number
-  isUpToDate: boolean
-  lastFetch?: Date
-}
-```
-
-### 6. CacheService
-
-**責務**: キャッシュ管理
-
-```typescript
-interface CacheService {
-  get<T>(key: string): Promise<T | null>
-  set<T>(key: string, value: T, ttl?: number): Promise<void>
-  delete(key: string): Promise<void>
-  clear(): Promise<void>
-  has(key: string): Promise<boolean>
-  getStats(): Promise<CacheStats>
-  cleanup(): Promise<number>  // 期限切れエントリ数を返す
-}
-
-interface CacheStats {
-  totalEntries: number
-  totalSize: number
-  hitRate: number
-  expiredEntries: number
-}
-```
-
-## データモデル設計
-
-### 1. Repository Entity（詳細版）
-
-```typescript
-interface Repository {
-  // 基本情報
-  id: string                    // UUID
-  name: string                  // リポジトリ名
-  displayName?: string          // 表示用名前（カスタム）
-  path: string                  // ローカルパス
-
-  // Git情報
-  gitInfo: GitInfo
-
-  // メタデータ
-  metadata: RepositoryMetadata
-
-  // ユーザー設定
-  tags: string[]
-  isFavorite: boolean
-  isArchived: boolean
-  customColor?: string
-  customIcon?: string
-  notes?: string
-
-  // アクセス情報
-  lastAccessed: Date
-  accessCount: number
-  accessHistory: AccessRecord[]
-
-  // システム情報
-  createdAt: Date
-  updatedAt: Date
-  lastScanAt: Date
-  scanVersion: string           // スキャンロジックのバージョン
-
-  // パフォーマンス情報
-  scanDuration: number          // 最後のスキャン時間（ms）
-  scanErrors?: string[]         // スキャン時のエラー
-}
-
-interface AccessRecord {
-  timestamp: Date
-  action: 'open' | 'scan' | 'view'
-  duration?: number
-}
-```
-
-### 2. Configuration Schema（詳細版）
-
-```typescript
-interface ReposManagerConfig {
-  // バージョン情報
-  version: string
-
-  // スキャン設定
-  scanning: {
-    rootPaths: string[]
-    excludePatterns: string[]
-    includePatterns?: string[]
-    maxDepth: number
-    maxFileCount: number
-    timeoutSeconds: number
-    concurrentScans: number
-    autoScanOnStartup: boolean
-    scanSchedule?: CronExpression
-
-    // 言語検出設定
-    languageDetection: {
-      minFileSize: number
-      maxFileSize: number
-      sampleFiles: number
-      excludeExtensions: string[]
-    }
-  }
-
-  // 表示設定
+/**
+ * 拡張機能の設定
+ */
+export interface ExtensionConfig {
+  scan: {
+    targetDirectories: string[];
+    excludePatterns: string[];
+    autoDetectPaths: string[]; // 自動検知候補パス
+  };
   display: {
-    visibleColumns: string[]
-    columnOrder: string[]
-    columnWidths: { [column: string]: number }
-    groupBy: 'none' | 'language' | 'owner' | 'workspace' | 'tag'
-    sortBy: string
-    sortOrder: 'asc' | 'desc'
-    viewMode: 'compact' | 'standard' | 'detailed'
-    showIcons: boolean
-    showTooltips: boolean
-    relativeTimestamps: boolean
+    showLastUpdateTime: boolean;
+    showLanguageIcon: boolean;
+    highlightUpdatedWithinDays: number;
+  };
+  cache: {
+    enabled: boolean; // キャッシュ機能の有効/無効
+    maxAge: number; // キャッシュの最大有効期間（秒）
+    backgroundScan: boolean; // 背景スキャンの有効/無効
+  };
+}
+```
 
-    // テーマ設定
-    theme: {
-      colors: { [status: string]: string }
-      icons: { [type: string]: string }
-      fonts: FontSettings
+### 2.3. `EmptyStateAction`
+
+空状態時のアクションボタンの情報を表すインターフェース。
+
+```typescript
+// src/types/index.ts
+
+/**
+ * 空状態時のアクションボタン
+ */
+export interface EmptyStateAction {
+  id: string; // アクションID
+  label: string; // ボタンラベル
+  icon: string; // アイコン名（Codicon）
+  tooltip: string; // ツールチップ
+  command: string; // 実行するコマンドID
+}
+
+/**
+ * 自動検知の結果
+ */
+export interface PathDetectionResult {
+  path: string; // 検知されたパス
+  hasRepositories: boolean; // リポジトリ/フォルダが存在するか
+  repositoryCount: number; // 見つかったリポジトリ数
+  folderCount: number; // 見つかったフォルダ数
+}
+```
+
+### 2.4. `RepositoryCache`
+
+リポジトリスキャン結果のキャッシュデータ構造。
+
+```typescript
+// src/types/index.ts
+
+/**
+ * リポジトリキャッシュのデータ構造
+ */
+export interface RepositoryCache {
+  version: string; // キャッシュフォーマットのバージョン
+  timestamp: number; // キャッシュ作成時刻（Unixタイムスタンプ）
+  targetDirectories: string[]; // スキャン対象ディレクトリ（設定変更検知用）
+  repositories: CachedRepository[]; // キャッシュされたリポジトリリスト
+}
+
+/**
+ * キャッシュされたリポジトリ情報
+ */
+export interface CachedRepository extends Repository {
+  cacheTimestamp: number; // このリポジトリの最終キャッシュ時刻
+  directoryLastModified: number; // ディレクトリの最終更新時刻
+}
+
+/**
+ * スキャン戦略の設定
+ */
+export interface ScanStrategy {
+  useCache: boolean; // キャッシュを使用するか
+  backgroundScan: boolean; // 背景スキャンを実行するか
+  cacheMaxAge: number; // キャッシュの最大有効期間（秒）
+  incrementalScan: boolean; // 差分スキャンを使用するか
+}
+```
+
+## 3. 主要機能のシーケンス図
+
+### 3.2. 差分スキャンによる背景更新
+
+```mermaid
+sequenceDiagram
+    participant RM as RepositoryManager
+    participant CS as CacheService
+    participant RA as RepositoryAnalyzer
+    participant RMP as ReposManagerProvider
+
+    Note over RM: 背景スキャン開始
+    RM->>CS: getCachedRepositories()
+    activate CS
+    CS-->>RM: CachedRepository[]
+    deactivate CS
+
+    loop Each target directory
+        RM->>RM: checkDirectoryChanges(path)
+
+        alt Directory unchanged
+            Note over RM: スキップ（高速化）
+        else Directory changed
+            RM->>RA: analyze(path)
+            activate RA
+            RA-->>RM: Repository
+            deactivate RA
+            RM->>CS: updateRepositoryCache(repository)
+        end
+    end
+
+    RM->>RMP: incrementalRefresh(changedRepositories)
+    activate RMP
+    RMP->>VSC: update TreeView (only changed items)
+    deactivate RMP
+```
+
+### 3.3. リポジトリをお気に入りに追加
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant VSC as VS Code
+    participant CR as CommandRegistry
+    participant FS as FavoriteService
+    participant RMP as ReposManagerProvider
+
+    User->>VSC: (Right-click) -> "Add to Favorites"
+    VSC->>CR: executeCommand('repos-manager.addToFavorites', repoItem)
+    activate CR
+    CR->>FS: toggleFavorite(repoId)
+    activate FS
+    FS-->>CR: Promise<void>
+    deactivate FS
+    CR->>RMP: refresh()
+    activate RMP
+    RMP->>VSC: update TreeView
+    deactivate RMP
+    deactivate CR
+```
+
+### 3.4. 空状態での自動パス検知
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant VSC as VS Code
+    participant CR as CommandRegistry
+    participant PDS as PathDetectionService
+    participant CS as ConfigurationService
+    participant RM as RepositoryManager
+
+    User->>VSC: Click "Auto-detect Paths"
+    VSC->>CR: executeCommand('repos-manager.autoDetectPaths')
+    activate CR
+    CR->>PDS: detectCommonPaths()
+    activate PDS
+    PDS-->>CR: PathDetectionResult[]
+    deactivate PDS
+    CR->>VSC: showQuickPick(detectedPaths)
+    VSC->>User: Display path selection
+    User->>VSC: Select paths to add
+    VSC->>CR: selectedPaths
+    CR->>CS: addTargetDirectories(selectedPaths)
+    activate CS
+    CS-->>CR: Promise<void>
+    deactivate CS
+    CR->>RM: scanRepositories()
+    activate RM
+    RM-->>CR: Repository[]
+    deactivate RM
+    deactivate CR
+```
+
+### 3.5. フォルダ追加ダイアログ
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant VSC as VS Code
+    participant CR as CommandRegistry
+    participant CS as ConfigurationService
+    participant RM as RepositoryManager
+
+    User->>VSC: Click "Add Folder"
+    VSC->>CR: executeCommand('repos-manager.addFolder')
+    activate CR
+    CR->>VSC: showOpenDialog({ canSelectFolders: true })
+    VSC->>User: Display folder selection dialog
+    User->>VSC: Select folder(s)
+    VSC->>CR: selectedFolders
+    CR->>CS: addTargetDirectories(selectedFolders)
+    activate CS
+    CS-->>CR: Promise<void>
+    deactivate CS
+    CR->>RM: scanRepositories()
+    activate RM
+    RM-->>CR: Repository[]
+    deactivate RM
+    deactivate CR
+```
+
+## 4. API設計 (コマンド)
+
+`package.json` の `contributes.commands` と同期させる。
+
+| コマンドID                               | 説明                                       | 実行コンテキスト |
+| ---------------------------------------- | ------------------------------------------ | ---------------- |
+| `repos-manager.refresh`                  | リポジトリリストを再スキャンして更新します。 | コマンドパレット |
+| `repos-manager.openRepository`           | 選択したリポジトリを現在のウィンドウで開きます。 | ツリービュー項目 |
+| `repos-manager.openInNewWindow`          | 選択したリポジトリを新しいウィンドウで開きます。 | ツリービュー項目 |
+| `repos-manager.addToFavorites`           | 選択したリポジトリをお気に入りに追加します。 | ツリービュー項目 |
+| `repos-manager.removeFromFavorites`      | 選択したリポジトリをお気に入りから削除します。 | ツリービュー項目 |
+| `repos-manager.openInTerminal`           | 選択したリポジトリのパスでターミナルを開きます。 | ツリービュー項目 |
+| `repos-manager.openInFileExplorer`       | 選択したリポジトリをファイルエクスプローラーで開きます。 | ツリービュー項目 |
+| `repos-manager.autoDetectPaths`          | 一般的なリポジトリ保存場所を自動検知してスキャンパスに追加します。 | 空状態UI |
+| `repos-manager.addFolder`                | フォルダ選択ダイアログでスキャンパスに追加します。 | 空状態UI |
+| `repos-manager.openSettings`             | VS Code設定の拡張機能セクションを開きます。 | 空状態UI |
+
+## 5. 新機能の実装詳細
+
+### 5.1. PathDetectionService
+
+一般的なリポジトリ保存場所の自動検知機能を提供するサービス。
+
+```typescript
+// src/services/PathDetectionService.ts
+
+export class PathDetectionService {
+  private readonly defaultPaths = [
+    '~/Documents/GitHub',
+    '~/Documents/github',
+    '~/Projects',
+    '~/workspace',
+    '~/dev',
+    '~/code',
+    '~/source',
+    '~/repos'
+  ];
+
+  /**
+   * 一般的なリポジトリ保存場所を自動検知
+   * @returns 検知されたパスと統計情報
+   */
+  async detectCommonPaths(): Promise<PathDetectionResult[]> {
+    // 実装詳細
+  }
+
+  /**
+   * 指定されたパスでリポジトリ/フォルダをスキャン
+   * @param path スキャン対象パス
+   * @returns スキャン結果
+   */
+  async scanPath(path: string): Promise<PathDetectionResult> {
+    // 実装詳細
+  }
+
+  /**
+   * パス展開（~を実際のホームディレクトリに変換）
+   * @param path 展開対象パス
+   * @returns 展開されたパス
+   */
+  private expandPath(path: string): string {
+    // 実装詳細
+  }
+}
+```
+
+### 5.2. RepositoryManager の拡張（キャッシュ対応）
+
+```typescript
+// src/core/RepositoryManager.ts (拡張部分)
+
+export class RepositoryManager {
+  // ...既存のコード...
+
+  constructor(
+    private readonly cacheService: CacheService,
+    // ...その他の依存関係...
+  ) {}
+
+  /**
+   * キャッシュを使用した高速リポジトリ読み込み
+   * @returns キャッシュされたリポジトリリスト
+   */
+  async loadRepositoriesFromCache(): Promise<Repository[]> {
+    const cachedRepos = await this.cacheService.loadCache();
+    if (!cachedRepos) {
+      return [];
+    }
+
+    // キャッシュからRepositoryオブジェクトに変換
+    return cachedRepos.map(cached => ({
+      id: cached.id,
+      name: cached.name,
+      path: cached.path,
+      isGit: cached.isGit,
+      gitInfo: cached.gitInfo,
+      mainLanguage: cached.mainLanguage,
+      lastModified: cached.lastModified,
+      isFavorite: cached.isFavorite
+    }));
+  }
+
+  /**
+   * 背景での差分スキャン
+   * @param cachedRepositories キャッシュされたリポジトリリスト
+   * @returns 更新されたリポジトリリスト
+   */
+  async performBackgroundScan(cachedRepositories: Repository[]): Promise<Repository[]> {
+    const targetDirectories = this.configurationService.getTargetDirectories();
+    const updatedRepositories: Repository[] = [];
+    const validPaths: string[] = [];
+
+    for (const targetDir of targetDirectories) {
+      try {
+        const foundRepos = await this.scanDirectory(targetDir);
+
+        for (const repo of foundRepos) {
+          validPaths.push(repo.path);
+
+          // キャッシュされたリポジトリと比較
+          const cachedRepo = cachedRepositories.find(c => c.path === repo.path);
+
+          if (!cachedRepo) {
+            // 新しいリポジトリ
+            updatedRepositories.push(repo);
+            await this.cacheService.updateRepositoryCache(repo);
+          } else {
+            // ディレクトリ変更チェック
+            const cachedWithTimestamp = await this.cacheService.loadCache();
+            const cached = cachedWithTimestamp?.find(c => c.path === repo.path);
+
+            if (cached && await this.cacheService.isDirectoryChanged(cached)) {
+              // 変更されたリポジトリを再分析
+              const updatedRepo = await this.repositoryAnalyzer.analyze(repo.path);
+              updatedRepositories.push(updatedRepo);
+              await this.cacheService.updateRepositoryCache(updatedRepo);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(`Failed to scan directory ${targetDir}:`, error);
+      }
+    }
+
+    // 無効なキャッシュエントリを削除
+    await this.cacheService.cleanupCache(validPaths);
+
+    return updatedRepositories;
+  }
+
+  /**
+   * フルスキャン実行（初回またはキャッシュ無効時）
+   * @returns 全リポジトリリスト
+   */
+  async performFullScan(): Promise<Repository[]> {
+    const repositories = await this.scanRepositories();
+    await this.cacheService.saveCache(repositories);
+    return repositories;
+  }
+
+  /**
+   * スマートスキャン：キャッシュがあれば背景スキャン、なければフルスキャン
+   * @returns { cached: Repository[], updated?: Repository[] }
+   */
+  async performSmartScan(): Promise<{ cached: Repository[], updated?: Repository[] }> {
+    const cachedRepositories = await this.loadRepositoriesFromCache();
+
+    if (cachedRepositories.length > 0) {
+      // キャッシュがある場合：即座に表示 + 背景更新
+      const updatedRepositories = await this.performBackgroundScan(cachedRepositories);
+      return {
+        cached: cachedRepositories,
+        updated: updatedRepositories.length > 0 ? updatedRepositories : undefined
+      };
+    } else {
+      // キャッシュがない場合：フルスキャン
+      const repositories = await this.performFullScan();
+      return { cached: repositories };
+    }
+  }
+}
+```
+
+### 5.3. 空状態UI の実装
+
+ReposManagerProvider に空状態時の UI 表示機能を追加。
+
+```typescript
+// src/ui/ReposManagerProvider.ts (追加部分)
+
+export class ReposManagerProvider implements vscode.TreeDataProvider<RepoTreeItem> {
+  // ...既存のコード...
+
+  /**
+   * 空状態時のアクションボタンを生成
+   */
+  private createEmptyStateActions(): EmptyStateAction[] {
+    return [
+      {
+        id: 'autoDetect',
+        label: 'Auto-detect Paths',
+        icon: 'search',
+        tooltip: 'Automatically detect common repository locations',
+        command: 'repos-manager.autoDetectPaths'
+      },
+      {
+        id: 'openSettings',
+        label: 'Settings',
+        icon: 'gear',
+        tooltip: 'Open extension settings',
+        command: 'repos-manager.openSettings'
+      },
+      {
+        id: 'addFolder',
+        label: 'Add Folder',
+        icon: 'folder-opened',
+        tooltip: 'Select folder to scan for repositories',
+        command: 'repos-manager.addFolder'
+      }
+    ];
+  }
+
+  /**
+   * 空状態時のツリーアイテムを生成
+   */
+  private createEmptyStateTreeItems(): RepoTreeItem[] {
+    const emptyStateItem = new RepoTreeItem('empty-state', '📁 No repositories found');
+    emptyStateItem.description = 'Repos Manager couldn\'t find any repositories';
+
+    const actions = this.createEmptyStateActions();
+    return [emptyStateItem, ...actions.map(action => {
+      const item = new RepoTreeItem(action.id, action.label);
+      item.iconPath = new vscode.ThemeIcon(action.icon);
+      item.tooltip = action.tooltip;
+      item.command = {
+        command: action.command,
+        title: action.label
+      };
+      return item;
+    })];
+  }
+}
+```
+
+### 5.4. ConfigurationService の拡張
+
+設定管理機能を拡張して、自動検知パスの追加機能を実装。
+
+```typescript
+// src/services/ConfigurationService.ts (追加部分)
+
+export class ConfigurationService {
+  // ...既存のコード...
+
+  /**
+   * スキャン対象ディレクトリを追加
+   * @param paths 追加するパスのリスト
+   */
+  async addTargetDirectories(paths: string[]): Promise<void> {
+    const config = vscode.workspace.getConfiguration('reposManager');
+    const currentPaths = config.get<string[]>('scan.targetDirectories', []);
+
+    // 重複を避けて追加
+    const uniquePaths = [...new Set([...currentPaths, ...paths])];
+
+    await config.update('scan.targetDirectories', uniquePaths, vscode.ConfigurationTarget.Global);
+  }
+
+  /**
+   * 自動検知候補パスを取得
+   * @returns 自動検知候補パスのリスト
+   */
+  getAutoDetectPaths(): string[] {
+    const config = vscode.workspace.getConfiguration('reposManager');
+    return config.get<string[]>('scan.autoDetectPaths', [
+      '~/Documents/GitHub',
+      '~/Documents/github',
+      '~/Projects',
+      '~/workspace',
+      '~/dev',
+      '~/code'
+    ]);
+  }
+}
+```
+
+### 5.5. CommandRegistry の拡張
+
+新機能のコマンドを登録。
+
+```typescript
+// src/extension/CommandRegistry.ts (追加部分)
+
+export class CommandRegistry {
+  // ...既存のコード...
+
+  /**
+   * 自動パス検知コマンドを実行
+   */
+  private async executeAutoDetectPaths(): Promise<void> {
+    const pathDetectionService = new PathDetectionService();
+    const detectedPaths = await pathDetectionService.detectCommonPaths();
+
+    if (detectedPaths.length === 0) {
+      this.dialogProvider.showInfo('No common repository paths found.');
+      return;
+    }
+
+    // QuickPickで選択可能なパスを表示
+    const quickPickItems = detectedPaths.map(result => ({
+      label: result.path,
+      description: `${result.repositoryCount} repos, ${result.folderCount} folders`,
+      detail: result.hasRepositories ? '✓ Contains repositories' : '○ Empty directory',
+      picked: result.hasRepositories
+    }));
+
+    const selectedItems = await vscode.window.showQuickPick(quickPickItems, {
+      canPickMany: true,
+      title: 'Select paths to add to scan targets',
+      placeHolder: 'Choose directories to scan for repositories'
+    });
+
+    if (selectedItems && selectedItems.length > 0) {
+      const selectedPaths = selectedItems.map(item => item.label);
+      await this.configurationService.addTargetDirectories(selectedPaths);
+
+      // 自動的にリポジトリスキャンを実行
+      await this.repositoryManager.scanRepositories();
+      this.dialogProvider.showInfo(`Added ${selectedPaths.length} path(s) to scan targets.`);
     }
   }
 
-  // 検索設定
-  search: {
-    maxResults: number
-    searchTimeout: number
-    enableFuzzySearch: boolean
-    saveHistory: boolean
-    maxHistoryItems: number
-    indexFiles: boolean
-    indexContent: boolean
+  /**
+   * フォルダ追加コマンドを実行
+   */
+  private async executeAddFolder(): Promise<void> {
+    const selectedFolders = await vscode.window.showOpenDialog({
+      canSelectFolders: true,
+      canSelectMany: true,
+      title: 'Select folders to scan for repositories'
+    });
+
+    if (selectedFolders && selectedFolders.length > 0) {
+      const folderPaths = selectedFolders.map(uri => uri.fsPath);
+      await this.configurationService.addTargetDirectories(folderPaths);
+
+      // 自動的にリポジトリスキャンを実行
+      await this.repositoryManager.scanRepositories();
+      this.dialogProvider.showInfo(`Added ${folderPaths.length} folder(s) to scan targets.`);
+    }
   }
 
-  // パフォーマンス設定
-  performance: {
-    maxConcurrentScans: number
-    cacheEnabled: boolean
-    cacheTtlHours: number
-    maxCacheSize: number
-    enableLazyLoading: boolean
-    backgroundRefresh: boolean
-    refreshInterval: number
-  }
-
-  // API設定
-  api: {
-    github: GitHubConfig
-    gitlab: GitLabConfig
-    requestTimeout: number
-    retryAttempts: number
-    rateLimitBuffer: number
-  }
-
-  // 通知設定
-  notifications: {
-    enabled: boolean
-    scanComplete: boolean
-    scanErrors: boolean
-    newRepositories: boolean
-    repositoryUpdates: boolean
-    lowActivity: boolean
-  }
-
-  // セキュリティ設定
-  security: {
-    encryptCache: boolean
-    excludePrivateData: boolean
-    anonymizeUserData: boolean
-    auditLog: boolean
-  }
-}
-
-interface GitHubConfig {
-  enabled: boolean
-  token?: string
-  baseUrl?: string
-  timeout: number
-  rateLimitWarning: boolean
-}
-
-interface GitLabConfig {
-  enabled: boolean
-  token?: string
-  url: string
-  timeout: number
-  rateLimitWarning: boolean
-}
-```
-
-### 3. UI State Management
-
-```typescript
-interface UIState {
-  // サイドバー状態
-  sidebar: {
-    expanded: boolean
-    width: number
-    selectedItem?: string
-    expandedGroups: string[]
-    scrollPosition: number
-  }
-
-  // 検索状態
-  search: {
-    query: string
-    filters: FilterCriteria
-    results: Repository[]
-    isSearching: boolean
-    selectedFilter?: string
-  }
-
-  // ワークスペース状態
-  workspace: {
-    currentId?: string
-    isManaging: boolean
-    selectedRepositories: string[]
-  }
-
-  // 設定状態
-  settings: {
-    isOpen: boolean
-    activeTab: string
-    isDirty: boolean
-    validationErrors: { [field: string]: string }
-  }
-
-  // 進行状況
-  progress: {
-    isScanning: boolean
-    current: number
-    total: number
-    currentRepository?: string
-    errors: string[]
+  /**
+   * 設定画面を開くコマンドを実行
+   */
+  private async executeOpenSettings(): Promise<void> {
+    await vscode.commands.executeCommand('workbench.action.openSettings', 'reposManager');
   }
 }
 ```
 
-## API設計
-
-### 1. Extension Commands
+### 5.6. 起動時のキャッシュベースリポジトリ読み込み
 
 ```typescript
-// VS Code拡張機能のコマンド定義
-const COMMANDS = {
-  // 基本操作
-  REFRESH_ALL: 'repos-manager.refreshAll',
-  REFRESH_REPOSITORY: 'repos-manager.refreshRepository',
-  OPEN_REPOSITORY: 'repos-manager.openRepository',
-  OPEN_IN_NEW_WINDOW: 'repos-manager.openInNewWindow',
-  OPEN_IN_EXPLORER: 'repos-manager.openInExplorer',
-  OPEN_IN_TERMINAL: 'repos-manager.openInTerminal',
-  OPEN_ON_GITHUB: 'repos-manager.openOnGitHub',
+// src/extension/ExtensionManager.ts
 
-  // リポジトリ管理
-  ADD_REPOSITORY: 'repos-manager.addRepository',
-  REMOVE_REPOSITORY: 'repos-manager.removeRepository',
-  TOGGLE_FAVORITE: 'repos-manager.toggleFavorite',
-  TOGGLE_ARCHIVE: 'repos-manager.toggleArchive',
-  ADD_TAG: 'repos-manager.addTag',
-  REMOVE_TAG: 'repos-manager.removeTag',
+export class ExtensionManager {
+  // ...既存のコード...
 
-  // 検索・フィルタ
-  FOCUS_SEARCH: 'repos-manager.focusSearch',
-  CLEAR_SEARCH: 'repos-manager.clearSearch',
-  SAVE_FILTER: 'repos-manager.saveFilter',
-  LOAD_FILTER: 'repos-manager.loadFilter',
+  /**
+   * 拡張機能のアクティブ化処理
+   */
+  async activate(context: vscode.ExtensionContext) {
+    this.context = context;
 
-  // ワークスペース
-  CREATE_WORKSPACE: 'repos-manager.createWorkspace',
-  SWITCH_WORKSPACE: 'repos-manager.switchWorkspace',
-  MANAGE_WORKSPACES: 'repos-manager.manageWorkspaces',
+    // 各サービスの初期化
+    this.cacheService = new CacheService();
+    this.configurationService = new ConfigurationService();
+    this.favoriteService = new FavoriteService();
+    this.repositoryManager = new RepositoryManager();
+    this.dialogProvider = new DialogProvider();
+    this.commandRegistry = new CommandRegistry();
 
-  // 設定
-  OPEN_SETTINGS: 'repos-manager.openSettings',
-  EXPORT_DATA: 'repos-manager.exportData',
-  IMPORT_DATA: 'repos-manager.importData',
+    // コマンドの登録
+    this.registerCommands();
 
-  // 表示制御
-  CHANGE_VIEW_MODE: 'repos-manager.changeViewMode',
-  TOGGLE_GROUP_BY: 'repos-manager.toggleGroupBy',
-  SORT_BY: 'repos-manager.sortBy'
-} as const
-```
+    // キャッシュベースのリポジトリ読み込み
+    await this.loadCachedRepositories();
+  }
 
-### 2. Event System
+  /**
+   * キャッシュされたリポジトリの読み込み
+   */
+  private async loadCachedRepositories() {
+    const cachedRepositories = await this.cacheService.loadCache();
 
-```typescript
-interface EventSystem {
-  // リポジトリイベント
-  onRepositoryAdded: Event<Repository>
-  onRepositoryRemoved: Event<string>
-  onRepositoryUpdated: Event<Repository>
-  onRepositoryScanned: Event<{ repository: Repository, duration: number }>
-
-  // スキャンイベント
-  onScanStarted: Event<{ repositoryCount: number }>
-  onScanProgress: Event<{ current: number, total: number, repository: Repository }>
-  onScanCompleted: Event<{ duration: number, successCount: number, errorCount: number }>
-  onScanError: Event<{ repository: Repository, error: Error }>
-
-  // 検索イベント
-  onSearchStarted: Event<SearchQuery>
-  onSearchCompleted: Event<SearchResult>
-  onFilterChanged: Event<FilterCriteria>
-
-  // ワークスペースイベント
-  onWorkspaceCreated: Event<Workspace>
-  onWorkspaceChanged: Event<Workspace>
-  onWorkspaceDeleted: Event<string>
-
-  // 設定イベント
-  onConfigurationChanged: Event<Partial<ReposManagerConfig>>
-
-  // UIイベント
-  onViewModeChanged: Event<string>
-  onGroupByChanged: Event<string>
-  onSortChanged: Event<{ by: string, order: 'asc' | 'desc' }>
+    if (cachedRepositories) {
+      // キャッシュが有効な場合
+      this.reposManagerProvider.refresh(cachedRepositories);
+      this.repositoryManager.scanRepositories(true); // 背景での差分スキャン
+    } else {
+      // キャッシュが無効または存在しない場合
+      this.reposManagerProvider.showLoadingState();
+      this.reposManagerProvider.updateMessage('Scanning repositories...');
+      this.repositoryManager.scanRepositories(false); // フルスキャン
+    }
+  }
 }
 ```
 
-## エラーハンドリング
+### 5.7. CacheService
 
-### 1. エラー分類
-
-```typescript
-enum ErrorType {
-  // システムエラー
-  FILESYSTEM_ERROR = 'filesystem_error',
-  GIT_ERROR = 'git_error',
-  NETWORK_ERROR = 'network_error',
-
-  // APIエラー
-  API_RATE_LIMIT = 'api_rate_limit',
-  API_AUTHENTICATION = 'api_authentication',
-  API_NOT_FOUND = 'api_not_found',
-
-  // ユーザーエラー
-  INVALID_PATH = 'invalid_path',
-  INVALID_CONFIGURATION = 'invalid_configuration',
-  PERMISSION_DENIED = 'permission_denied',
-
-  // パフォーマンスエラー
-  TIMEOUT_ERROR = 'timeout_error',
-  MEMORY_ERROR = 'memory_error',
-  SCAN_TOO_LARGE = 'scan_too_large'
-}
-
-interface ReposManagerError extends Error {
-  type: ErrorType
-  code: string
-  context?: any
-  recoverable: boolean
-  userMessage: string
-  technicalMessage: string
-}
-```
-
-### 2. エラー回復戦略
+リポジトリスキャン結果のキャッシュ管理を担当するサービス。
 
 ```typescript
-interface ErrorRecoveryStrategy {
-  canRecover(error: ReposManagerError): boolean
-  recover(error: ReposManagerError): Promise<void>
-  getRetryDelay(attempt: number): number
-  getMaxRetries(): number
-  shouldNotifyUser(error: ReposManagerError): boolean
-  getUserActionSuggestion(error: ReposManagerError): string
-}
-```
+// src/services/CacheService.ts
 
-## パフォーマンス最適化
+export class CacheService {
+  private readonly cacheFile: string;
+  private readonly cacheVersion = '1.0.0';
+  private readonly defaultMaxAge = 24 * 60 * 60; // 24時間（秒）
 
-### 1. 仮想化戦略
+  constructor(private readonly context: vscode.ExtensionContext) {
+    this.cacheFile = path.join(context.globalStorageUri.fsPath, 'repository-cache.json');
+  }
 
-```typescript
-interface VirtualizationConfig {
-  enabled: boolean
-  itemHeight: number
-  bufferSize: number
-  renderThreshold: number
-  lazyLoadThreshold: number
-}
-```
+  /**
+   * キャッシュを読み込み
+   * @returns キャッシュされたリポジトリリスト（無効な場合はnull）
+   */
+  async loadCache(): Promise<CachedRepository[] | null> {
+    try {
+      if (!fs.existsSync(this.cacheFile)) {
+        return null;
+      }
 
-### 2. メモリ管理
+      const cacheData: RepositoryCache = JSON.parse(
+        await fs.promises.readFile(this.cacheFile, 'utf8')
+      );
 
-```typescript
-interface MemoryManager {
-  getCurrentUsage(): Promise<MemoryUsage>
-  cleanup(): Promise<void>
-  setMemoryLimit(limitMB: number): void
-  getMemoryLimit(): number
-  onMemoryWarning: Event<MemoryUsage>
-}
+      // バージョンチェック
+      if (cacheData.version !== this.cacheVersion) {
+        return null;
+      }
 
-interface MemoryUsage {
-  heapUsed: number
-  heapTotal: number
-  external: number
-  resident: number
-}
-```
+      // 設定変更チェック
+      const currentTargetDirs = this.configurationService.getTargetDirectories();
+      if (!this.areArraysEqual(cacheData.targetDirectories, currentTargetDirs)) {
+        return null;
+      }
 
-### 3. バックグラウンドタスク
+      // 有効期限チェック
+      const maxAge = this.configurationService.getCacheMaxAge() || this.defaultMaxAge;
+      if (Date.now() - cacheData.timestamp > maxAge * 1000) {
+        return null;
+      }
 
-```typescript
-interface BackgroundTaskManager {
-  scheduleTask(task: BackgroundTask): Promise<string>
-  cancelTask(taskId: string): Promise<void>
-  getTasks(): BackgroundTask[]
-  onTaskCompleted: Event<{ taskId: string, result: any }>
-  onTaskFailed: Event<{ taskId: string, error: Error }>
-}
+      return cacheData.repositories;
+    } catch (error) {
+      console.warn('Failed to load cache:', error);
+      return null;
+    }
+  }
 
-interface BackgroundTask {
-  id: string
-  type: 'scan' | 'refresh' | 'cleanup' | 'index'
-  priority: 'low' | 'normal' | 'high'
-  params: any
-  timeout?: number
-  retries?: number
-  schedule?: CronExpression
-}
-```
+  /**
+   * キャッシュを保存
+   * @param repositories リポジトリリスト
+   */
+  async saveCache(repositories: Repository[]): Promise<void> {
+    try {
+      const cacheData: RepositoryCache = {
+        version: this.cacheVersion,
+        timestamp: Date.now(),
+        targetDirectories: this.configurationService.getTargetDirectories(),
+        repositories: repositories.map(repo => ({
+          ...repo,
+          cacheTimestamp: Date.now(),
+          directoryLastModified: await this.getDirectoryLastModified(repo.path)
+        }))
+      };
 
-## テスト戦略
+      // ディレクトリが存在しない場合は作成
+      const cacheDir = path.dirname(this.cacheFile);
+      if (!fs.existsSync(cacheDir)) {
+        await fs.promises.mkdir(cacheDir, { recursive: true });
+      }
 
-### 1. テスト分類
+      await fs.promises.writeFile(this.cacheFile, JSON.stringify(cacheData, null, 2));
+    } catch (error) {
+      console.warn('Failed to save cache:', error);
+    }
+  }
 
-```typescript
-interface TestSuite {
-  unit: UnitTests
-  integration: IntegrationTests
-  e2e: E2ETests
-  performance: PerformanceTests
-}
+  /**
+   * 個別リポジトリのキャッシュを更新
+   * @param repository 更新するリポジトリ
+   */
+  async updateRepositoryCache(repository: Repository): Promise<void> {
+    const cache = await this.loadCache();
+    if (!cache) return;
 
-interface UnitTests {
-  repositoryManager: TestCase[]
-  analysisEngine: TestCase[]
-  searchEngine: TestCase[]
-  gitService: TestCase[]
-  cacheService: TestCase[]
-}
+    const index = cache.findIndex(r => r.id === repository.id);
+    const cachedRepo: CachedRepository = {
+      ...repository,
+      cacheTimestamp: Date.now(),
+      directoryLastModified: await this.getDirectoryLastModified(repository.path)
+    };
 
-interface TestCase {
-  name: string
-  description: string
-  setup?: () => Promise<void>
-  test: () => Promise<void>
-  teardown?: () => Promise<void>
-  timeout?: number
-  skip?: boolean
-}
-```
+    if (index >= 0) {
+      cache[index] = cachedRepo;
+    } else {
+      cache.push(cachedRepo);
+    }
 
-### 2. モックデータ
+    await this.saveCache(cache);
+  }
 
-```typescript
-interface MockDataGenerator {
-  generateRepository(overrides?: Partial<Repository>): Repository
-  generateRepositories(count: number): Repository[]
-  generateGitInfo(overrides?: Partial<GitInfo>): GitInfo
-  generateWorkspace(repositoryCount: number): Workspace
-  generateConfig(overrides?: Partial<ReposManagerConfig>): ReposManagerConfig
-}
-```
+  /**
+   * 無効なキャッシュエントリを削除
+   * @param validPaths 現在有効なパスのリスト
+   */
+  async cleanupCache(validPaths: string[]): Promise<void> {
+    const cache = await this.loadCache();
+    if (!cache) return;
 
-## デプロイメント・配布
+    const validCache = cache.filter(repo => validPaths.includes(repo.path));
+    await this.saveCache(validCache);
+  }
 
-### 1. パッケージ構成
+  /**
+   * ディレクトリが変更されたかチェック
+   * @param cachedRepo キャッシュされたリポジトリ
+   * @returns 変更されている場合true
+   */
+  async isDirectoryChanged(cachedRepo: CachedRepository): Promise<boolean> {
+    try {
+      const currentLastModified = await this.getDirectoryLastModified(cachedRepo.path);
+      return currentLastModified > cachedRepo.directoryLastModified;
+    } catch {
+      return true; // エラーの場合は変更されたとみなす
+    }
+  }
 
-```typescript
-interface PackageStructure {
-  src: SourceFiles
-  out: CompiledFiles
-  resources: ResourceFiles
-  tests: TestFiles
-  docs: DocumentationFiles
-}
+  /**
+   * ディレクトリの最終更新時刻を取得
+   * @param dirPath ディレクトリパス
+   * @returns 最終更新時刻（Unixタイムスタンプ）
+   */
+  private async getDirectoryLastModified(dirPath: string): Promise<number> {
+    try {
+      const stats = await fs.promises.stat(dirPath);
+      return stats.mtime.getTime();
+    } catch {
+      return 0;
+    }
+  }
 
-interface BuildConfiguration {
-  target: 'development' | 'production'
-  minify: boolean
-  sourceMaps: boolean
-  bundleAnalyzer: boolean
-  externals: string[]
-}
-```
-
-### 2. リリースプロセス
-
-```typescript
-interface ReleaseProcess {
-  preRelease: ReleaseStep[]
-  build: ReleaseStep[]
-  test: ReleaseStep[]
-  package: ReleaseStep[]
-  publish: ReleaseStep[]
-  postRelease: ReleaseStep[]
-}
-
-interface ReleaseStep {
-  name: string
-  command: string
-  condition?: string
-  continueOnError?: boolean
-  timeout?: number
+  /**
+   * 配列の内容が等しいかチェック
+   */
+  private areArraysEqual(arr1: string[], arr2: string[]): boolean {
+    if (arr1.length !== arr2.length) return false;
+    return arr1.sort().every((val, index) => val === arr2.sort()[index]);
+  }
 }
 ```

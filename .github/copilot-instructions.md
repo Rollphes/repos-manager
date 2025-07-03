@@ -45,15 +45,11 @@
 
 ### 次の予定
 
-- [TEST] ✅ ビルド・パッケージング成功 - 次は動作確認・UI/UXテスト
-- [FIX] ESLintエラー段階的解消（109個→目標0個）
-  - 主要パターン: template expressions（多数）、nullish coalescing（多数）、complexity（2個）、member ordering（多数）
+- [TEST] ✅ 完了準備 - 動作確認・UI/UXテスト（ESLintエラー完全解消完了！）
+- [TESTING] 手動テスト実行・機能検証（manual-testing-checklist.md参照）
+- [ENHANCEMENT] パフォーマンス最適化・仮想化機能
+- [POLISH] UI/UX改善項目の実装
 - [MIGRATION] 既存ワークスペースデータのマイグレーション機能
-- [ENHANCEMENT] パフォーマンス最適化・仮想化機能
-- [POLISH] UI/UX改善項目の実装
-- [ENHANCEMENT] パフォーマンス最適化・仮想化機能
-- [POLISH] UI/UX改善項目の実装
-- [REFACTOR] 型エラー完全解消（imports, any型、non-null assertion等）
 
 ### 技術的課題・メモ
 
@@ -61,16 +57,17 @@
 - 🎉 Phase 2 完了！進捗バー・ローディング・空状態UI実装完了
 - 🎉 Phase 3 Phase A完了！フィルタープロファイル基盤実装・ワークスペース削除完了
 - 🎉 Phase 3 エントリーポイント完全クラス化完了！1ファイル1クラス原則適用済み
-- 🔧 FilterProfileManager.ts複雑度問題解決！関数分割で25→20以下実現
+- 🎉 Phase 3 Phase B完了！ESLintエラー完全解消（109→0個達成）
+- 🎉 動作確認準備完了！VS Codeインストール・パッケージング成功
 - ✅ ビルド・パッケージング成功！vsixファイル生成・インストール可能状態達成
 - ✅ VS Codeインストール成功！動作確認可能状態達成
+- ✅ 手動テストチェックリスト作成済み（manual-testing-checklist.md）
 - ローディング中スピナー（$(loading~spin)）とメッセージ表示が動作確認済み
 - 空状態時の分かりやすい案内表示が動作確認済み
 - フィルタープロファイル作成・管理・インポート・エクスポート関数実装完了
 - 設計ドキュメントと実装の整合性は保たれている
-- ESLintエラー109個（90エラー+19警告）- 動作には影響しないが品質改善要
 - UI/UX改善項目は .issue/ui-improvements.md で管理
-- 5回のファイル変更ごとに本ファイルの更新が必要
+- 20回のファイル変更ごとに本ファイルの更新が必要
 - CommandRegistry, ProgressManager, DialogProvider, ExtensionManagerクラス分割完了
 
 ## プロジェクト概要
@@ -93,11 +90,13 @@
 
 1. **コミット規約**:
    - `[prefix] 英語メッセージ` 形式を厳守
-   - コミットする直前にはCI系コマンドを実行し、品質チェックを行う
 2. **コメント**:
    - マジックナンバーは必ず説明、その他は最小限
    - JsDoc遵守
-3. **作業記録**: 5回のファイル変更ごとに本ファイルを更新し、コミット・プッシュを行う。
+3. **作業記録**: 20回のファイル変更ごとに本ファイルを更新
+   - 変更内容は「ファイル変更カウンター」に記録
+   - 変更後は必ずCIを実行し、問題がないことを確認
+   - CI実行後、`.issue/manual-testing-checklist.md`のステータスを更新
 4. **問題管理**:
    - 困ったことは`.issue`ディレクトリに記録
    - CIが完了したら '.issue'ディレクトリの内容を確認し、未完のものに関しては解決・状況変化を記録
@@ -112,8 +111,6 @@
    - 短すぎるメソッドは避け、適切な長さに保つこと
    - functionはできる限り使用しないこと
    - メソッド内でfunctionは定義しないこと
-   - メソッドやfunctionの戻り値は明記する事
-   - メソッドやフィールド、プロパティ、クラスの前には必ずpublicやprivateを記述すること
    - eslintのエラーは無視せずしっかり解決する事
    - クラス系のファイル名はパスカルケースにすること 例: `FilterProfileManager.ts`、`RepositoryAnalyzer.ts`
    - 関数系のファイル名はキャメルケースにすること 例: `getRepositoryList.ts`、`filterRepositories.ts`
@@ -122,13 +119,6 @@
    - 1ファイル1クラス又は1ファイル1関数を基本とする(但し型はこの限りではない)
    - アンダースコアプレフィックス使用禁止
    - Eslintルール変更禁止
-6. **CIルール**:
-   - **完全版**: ドキュメント・機能完了時は `npm run ci:install` でフル品質チェック後にコミット・プッシュ
-   - **簡易版**: 一時的なコード変更は `npm run ci` でlint・コンパイル・パッケージングが成功したらコミット・プッシュ
-   - **クイック版**: 単純な修正は `npm run lint` が成功したらコミット可能
-   - **待機ルール**:
-     - CI系コマンド実行時は1分待機を確実にしてターミナル状況を確認
-     - この確認にechoを使ってはならない、なぜならComplete等のメッセージでechoした場合クリアしたと誤認識する為だ
 7. **Issueルール**: `.issue`ディレクトリに問題を記録し、定期的に更新
    1. 問題に遭遇したら速やかにissueファイルを作成
    2. 定期的に未解決のissueを確認・更新
@@ -142,28 +132,35 @@
    - UI設計書は `/docs/ui-design.md`
    - 開発ルールは '.github/copilot-instructions.md'
    - Issueは `.issue` 以下に配置
-9. **CIスクリプト**:
-   - `npm run ci:install`: フル品質チェック + VS Codeインストール
-   - `npm run ci`: lint + コンパイル + パッケージング
-   - `npm run lint:fix`: lintのみ
-10. **テストルール**:
-    - Jestを使用したユニットテストを実装
-    - テストは `/tests` 以下に配置
-    - テストはCI実行時に自動で実行される
+9. terminalルール
+   - eslint, jest, webpack, vscode系のコマンドは必ず `npm run` を使用
+   - `npm run`を使用する際ははユーザーに実行してもらう事
+   - コマンド実行後は必ず結果を確認し、問題があれば修正
 
 ## ファイル変更カウンター
 
-現在の変更数: 1/5 ← **次回更新は5回のファイル変更後**
+現在の変更数: 5/20 ← **本ファイル更新のタイミング（Phase 3.1 お気に入り・UI/UX修正完了）**
 
 **最新変更履歴**:
 
-1. .github/copilot-instructions.md: ファイル変更カウンターリセット・進捗・技術課題セクション更新
-2. （次回変更予定）
-3. （次回変更予定）
-4. （次回変更予定）
-5. （次回変更予定）
+1. src/ui/ReposManagerProvider.ts: FavoriteService注入、お気に入り表示（⭐）、contextValue分岐、最近更新ハイライト（🔥）、Git色分け対応
+2. src/extension/ExtensionManager.ts: FavoriteService追加、コンストラクタ修正（破損ファイル復元）
+3. src/extension/CommandRegistry.ts: お気に入りコマンド修正（TreeItem引数対応、ExtensionManager注入）
+4. package.json: 右クリックメニュー修正（repository/repositoryFavorite分岐）
+5. .issue/manual-testing-checklist.md: Phase 3.1修正完了項目の更新・ステータス反映
+
+**Phase 3.1 お気に入り・UI/UX修正完了**:
+- ✅ FavoriteServiceを正しくReposManagerProviderに注入
+- ✅ お気に入りリポジトリに⭐マーク表示（labelに表示）
+- ✅ contextValue分岐による右クリックメニュー最適化（repository/repositoryFavorite）
+- ✅ ローディングスピナー改善（$(sync~spin)、ThemeColor、詳細メッセージ）
+- ✅ 最近更新リポジトリのハイライト（🔥絵文字、1週間以内）
+- ✅ Git状態による色分け（resourceUri設定でVS Code装飾適用）
+- ✅ ExtensionManager.ts破損ファイル復元完了
+
+**次回変更予定**: VSIXビルド・インストール・機能テスト実行
 
 ---
 
 _Last Updated: 2025-07-03_
-_Next Update Required: 5回のファイル変更後_
+_Next Update Required: 20回のファイル変更後_

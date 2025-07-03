@@ -20,21 +20,17 @@
         "repository",
         "project",
         "manager",
-        "filter",
-        "profile",
         "scanner"
     ],
-    "activationEvents": [
-        "onStartupFinished"
-    ],
+    "activationEvents": [],
     "main": "./dist/extension/index.js",
     "contributes": {
         "views": {
-            "explorer": [
+            "activitybar": [
                 {
                     "id": "reposManager",
                     "name": "Repos Manager",
-                    "when": "reposManager.enabled"
+                    "icon": "$(folder-library)"
                 }
             ]
         },
@@ -54,81 +50,32 @@
                 "icon": "$(refresh)"
             },
             {
-                "command": "reposManager.openSettings",
-                "title": "Settings",
-                "icon": "$(gear)"
-            },
-            {
-                "command": "reposManager.scanRepositories",
-                "title": "Scan Repositories"
-            },
-            {
                 "command": "reposManager.openRepository",
-                "title": "Open Repository"
+                "title": "Open in Current Window"
             },
             {
-                "command": "reposManager.openRepositoryInNewWindow",
+                "command": "reposManager.openInNewWindow",
                 "title": "Open in New Window"
             },
             {
-                "command": "reposManager.toggleFavorite",
-                "title": "Toggle Favorite"
-            },
-            {
                 "command": "reposManager.addToFavorites",
-                "title": "Add to Favorites"
+                "title": "Add to Favorites",
+                "icon": "$(star-empty)"
             },
             {
                 "command": "reposManager.removeFromFavorites",
-                "title": "Remove from Favorites"
+                "title": "Remove from Favorites",
+                "icon": "$(star-full)"
             },
             {
-                "command": "reposManager.search",
-                "title": "Search Repositories",
-                "icon": "$(search)"
+                "command": "reposManager.openInTerminal",
+                "title": "Open in Terminal",
+                "icon": "$(terminal)"
             },
             {
-                "command": "reposManager.filter",
-                "title": "Filter Repositories",
-                "icon": "$(filter)"
-            },
-            {
-                "command": "reposManager.basicFilter",
-                "title": "Basic Filter"
-            },
-            {
-                "command": "reposManager.advancedFilter",
-                "title": "Advanced Filter"
-            },
-            {
-                "command": "reposManager.clearFilters",
-                "title": "Clear All Filters",
-                "icon": "$(clear-all)"
-            },
-            {
-                "command": "reposManager.createFilterProfile",
-                "title": "Create Filter Profile",
-                "icon": "$(new-folder)"
-            },
-            {
-                "command": "reposManager.switchFilterProfile",
-                "title": "Switch Filter Profile",
-                "icon": "$(filter)"
-            },
-            {
-                "command": "reposManager.manageFilterProfiles",
-                "title": "Manage Filter Profiles",
-                "icon": "$(gear)"
-            },
-            {
-                "command": "reposManager.exportFilterProfile",
-                "title": "Export Filter Profile",
-                "icon": "$(export)"
-            },
-            {
-                "command": "reposManager.importFilterProfile",
-                "title": "Import Filter Profile",
-                "icon": "$(import)"
+                "command": "reposManager.openInFileExplorer",
+                "title": "Reveal in File Explorer",
+                "icon": "$(folder-opened)"
             }
         ],
         "menus": {
@@ -137,135 +84,72 @@
                     "command": "reposManager.refresh",
                     "when": "view == reposManager",
                     "group": "navigation@1"
-                },
-                {
-                    "command": "reposManager.search",
-                    "when": "view == reposManager",
-                    "group": "navigation@3"
-                },
-                {
-                    "command": "reposManager.filter",
-                    "when": "view == reposManager",
-                    "group": "navigation@4"
-                },
-                {
-                    "command": "reposManager.clearFilters",
-                    "when": "view == reposManager",
-                    "group": "1_filter@1"
-                },
-                {
-                    "command": "reposManager.createFilterProfile",
-                    "when": "view == reposManager",
-                    "group": "2_profile@1"
-                },
-                {
-                    "command": "reposManager.switchFilterProfile",
-                    "when": "view == reposManager",
-                    "group": "2_profile@2"
-                },
-                {
-                    "command": "reposManager.manageFilterProfiles",
-                    "when": "view == reposManager",
-                    "group": "2_profile@3"
                 }
             ],
             "view/item/context": [
                 {
                     "command": "reposManager.openRepository",
-                    "when": "view == reposManager && viewItem == repository",
-                    "group": "1_open@1"
+                    "when": "view == reposManager && (viewItem == repository || viewItem == repositoryFavorite)",
+                    "group": "navigation@1"
                 },
                 {
-                    "command": "reposManager.openRepositoryInNewWindow",
-                    "when": "view == reposManager && viewItem == repository",
-                    "group": "1_open@2"
-                },
-                {
-                    "command": "reposManager.toggleFavorite",
-                    "when": "view == reposManager && viewItem == repository",
-                    "group": "2_favorites@1"
+                    "command": "reposManager.openInNewWindow",
+                    "when": "view == reposManager && (viewItem == repository || viewItem == repositoryFavorite)",
+                    "group": "navigation@2"
                 },
                 {
                     "command": "reposManager.addToFavorites",
-                    "when": "view == reposManager && viewItem == repository && !reposManager.isFavorite",
-                    "group": "2_favorites@2"
+                    "when": "view == reposManager && viewItem == repository",
+                    "group": "navigation@3"
                 },
                 {
                     "command": "reposManager.removeFromFavorites",
-                    "when": "view == reposManager && viewItem == repository && reposManager.isFavorite",
-                    "group": "2_favorites@3"
+                    "when": "view == reposManager && viewItem == repositoryFavorite",
+                    "group": "navigation@3"
+                },
+                {
+                    "command": "reposManager.openInTerminal",
+                    "when": "view == reposManager && (viewItem == repository || viewItem == repositoryFavorite)",
+                    "group": "navigation@4"
+                },
+                {
+                    "command": "reposManager.openInFileExplorer",
+                    "when": "view == reposManager && (viewItem == repository || viewItem == repositoryFavorite)",
+                    "group": "navigation@5"
                 }
             ]
         },
         "configuration": {
             "title": "Repos Manager",
             "properties": {
-                "reposManager.scanPaths": {
+                "reposManager.scan.targetDirectories": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     },
                     "default": [],
-                    "description": "Root directories to scan for repositories"
+                    "description": "An array of absolute paths to directories to scan for repositories."
                 },
-                "reposManager.excludePatterns": {
+                "reposManager.scan.excludePatterns": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     },
                     "default": [
-                        "node_modules",
-                        ".git",
-                        "dist",
-                        "build",
-                        ".next",
-                        ".nuxt"
+                        "**/node_modules/**",
+                        "**/.git/**",
+                        "**/dist/**",
+                        "**/build/**",
+                        "**/.next/**",
+                        "**/.nuxt/**"
                     ],
-                    "description": "Patterns to exclude from scanning"
+                    "description": "An array of glob patterns to exclude directories from the scan."
                 },
-                "reposManager.maxDepth": {
+                "reposManager.display.highlightUpdatedWithinDays": {
                     "type": "number",
-                    "default": 5,
-                    "minimum": 1,
-                    "maximum": 10,
-                    "description": "Maximum depth for directory scanning"
-                },
-                "reposManager.displayMode": {
-                    "type": "string",
-                    "enum": [
-                        "compact",
-                        "standard",
-                        "detailed"
-                    ],
-                    "default": "compact",
-                    "description": "Display mode for repository list"
-                },
-                "reposManager.showFavorites": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Show favorites section"
-                },
-                "reposManager.groupBy": {
-                    "type": "string",
-                    "enum": [
-                        "none",
-                        "language",
-                        "owner"
-                    ],
-                    "default": "none",
-                    "description": "Group repositories by criteria"
-                },
-                "reposManager.cacheEnabled": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Enable caching for better performance"
-                },
-                "reposManager.cacheTtlHours": {
-                    "type": "number",
-                    "default": 24,
-                    "minimum": 1,
-                    "maximum": 168,
-                    "description": "Cache time-to-live in hours"
+                    "default": 7,
+                    "minimum": 0,
+                    "description": "Repositories updated within this number of days will be highlighted. Set to 0 to disable."
                 }
             }
         }

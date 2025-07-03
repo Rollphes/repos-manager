@@ -1,4 +1,3 @@
-import { FilterProfile } from '@types'
 import * as vscode from 'vscode'
 
 /**
@@ -62,64 +61,6 @@ export class DialogProvider {
         : undefined,
       password: options?.password ?? false,
     })
-  }
-
-  /**
-   * Show filter profile selection dialog
-   * @param profiles
-   * @param options
-   * @param options.title
-   * @param options.canSelectMany
-   * @param options.showActiveFirst
-   */
-  public async showFilterProfileSelection(
-    profiles: FilterProfile[],
-    options?: {
-      title?: string
-      canSelectMany?: boolean
-      showActiveFirst?: boolean
-    },
-  ): Promise<FilterProfile | FilterProfile[] | undefined> {
-    if (profiles.length === 0) {
-      vscode.window.showWarningMessage('No filter profiles available')
-      return undefined
-    }
-
-    // Sort profiles to show active first if requested
-    let sortedProfiles = profiles
-    if (options?.showActiveFirst) {
-      sortedProfiles = [...profiles].sort((a, b) => {
-        if (a.isActive && !b.isActive) return -1
-        if (!a.isActive && b.isActive) return 1
-        return 0
-      })
-    }
-
-    interface ProfileQuickPickItem extends vscode.QuickPickItem {
-      profile: FilterProfile
-    }
-
-    const items: ProfileQuickPickItem[] = sortedProfiles.map((profile) => ({
-      label: profile.name,
-      description: profile.description,
-      detail: profile.isActive ? '(Active)' : undefined,
-      profile,
-    }))
-
-    if (options?.canSelectMany) {
-      const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: options.title ?? 'Select filter profiles',
-        canPickMany: true,
-      })
-
-      return selected ? selected.map((item) => item.profile) : undefined
-    } else {
-      const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: options?.title ?? 'Select a filter profile',
-      })
-
-      return selected ? selected.profile : undefined
-    }
   }
 
   /**

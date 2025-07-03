@@ -407,6 +407,7 @@ export interface RepositoryFilter {
   readonly hasUncommitted?: boolean
   readonly workspaceId?: string
   readonly searchTerm?: string
+  readonly lastModifiedAfter?: Date
   readonly dateRange?: {
     readonly startDate: Date
     readonly endDate: Date
@@ -429,49 +430,6 @@ export interface SortOption {
     | 'size'
     | 'favorite'
   readonly order: 'asc' | 'desc'
-}
-
-/**
- * Filter Profile interface - replaces static Workspace with dynamic filter-based grouping
- */
-export interface FilterProfile {
-  readonly id: string
-  readonly name: string
-  readonly description?: string
-  readonly icon?: string
-  readonly color?: string
-  readonly filters: FilterCriteria
-  readonly isActive: boolean
-  readonly createdAt: Date
-  readonly updatedAt: Date
-  readonly tags: readonly string[]
-}
-
-/**
- * Filter Profile export/import format for sharing between developers
- */
-export interface FilterProfileExport {
-  readonly version: string
-  readonly profile: Omit<
-    FilterProfile,
-    'id' | 'createdAt' | 'updatedAt' | 'isActive'
-  >
-  readonly metadata: {
-    readonly exportedBy: string
-    readonly exportedAt: Date
-    readonly compatibilityVersion: string
-  }
-}
-
-/**
- * Filter Profile statistics and analytics
- */
-export interface FilterProfileStats {
-  readonly totalRepositories: number
-  readonly languageDistribution: Record<string, number>
-  readonly lastActivity: Date
-  readonly averageHealth: number
-  readonly matchedRepositoryIds: readonly string[]
 }
 
 /**

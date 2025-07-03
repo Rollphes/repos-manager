@@ -1,17 +1,11 @@
-import { FilterProfileManager } from '@core/FilterProfileManager'
 import { RepositoryManager } from '@core/RepositoryManager'
-import {
-  FilterCriteria,
-  FilterProfile,
-  Repository,
-  RepositoryFilter,
-} from '@types'
+import { FavoriteService } from '@services/FavoriteService'
+import { Repository, RepositoryFilter } from '@types'
 import * as vscode from 'vscode'
 
 interface ExtendedTreeItem extends vscode.TreeItem {
   repositories?: Repository[]
   repository?: Repository
-  filterProfile?: FilterProfile
 }
 
 /**
@@ -25,14 +19,12 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
   public readonly onDidChangeTreeData = this._onDidChangeTreeData.event
 
   private currentFilter: RepositoryFilter = {}
-  private groupBy: 'none' | 'language' | 'favorite' | 'filterProfile' = 'none'
+  private groupBy: 'none' | 'language' | 'favorite' = 'none'
   private isLoading = false
-  private readonly showFilterProfiles = true
 
   constructor(
     private readonly repositoryManager: RepositoryManager,
-
-    private readonly filterProfileManager: FilterProfileManager,
+    private readonly favoriteService: FavoriteService,
   ) {
     // Listen for repository changes
     this.repositoryManager.onDidChangeRepositoriesEvent(() => {
@@ -40,13 +32,8 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
       this.refresh()
     })
 
-    // Listen for filter profile changes
-    this.filterProfileManager.onDidChangeProfilesEvent(() => {
-      this.refresh()
-    })
-
-    // Listen for active filter profile changes
-    this.filterProfileManager.onDidChangeActiveProfileEvent(() => {
+    // Listen for favorite changes
+    this.favoriteService.onDidChangeFavoritesEvent(() => {
       this.refresh()
     })
   }
@@ -87,9 +74,7 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
    * Set grouping mode
    * @param groupBy
    */
-  public setGroupBy(
-    groupBy: 'none' | 'language' | 'favorite' | 'filterProfile',
-  ): void {
+  public setGroupBy(groupBy: 'none' | 'language' | 'favorite'): void {
     this.groupBy = groupBy
     this.refresh()
   }
@@ -103,32 +88,69 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
   }
 
   /**
-   * Set filter profile view mode
-   * @param showProfiles
+   * Show search dialog
    */
-  public setShowFilterProfiles(): void {
-    console.warn(
-      'Filter profile view toggle requested - feature reserved for future implementation',
-    )
-    this.refresh()
+  public async showSearchDialog(): Promise<void> {
+    const searchText = await vscode.window.showInputBox({
+      prompt: 'Search repositories by name',
+      placeHolder: 'Enter search term...',
+    })
+
+    if (searchText !== undefined) this.setFilter({ name: searchText })
   }
 
   /**
-   * Apply filter profile
-   * @param profileId
+   * Show filter dialog
    */
-  public async applyFilterProfile(
-    profileId: string | undefined,
-  ): Promise<void> {
-    if (profileId) {
-      // Apply profile to current repositories
-      const repositories = this.repositoryManager.getRepositories()
-      await this.filterProfileManager.applyProfile(profileId, repositories)
-    } else {
-      await this.filterProfileManager.clearActiveProfile()
+  public async showFilterDialog(): Promise<void> {
+    const filterOptions = [
+      { label: '🗂️ All Languages', value: 'all' },
+      { label: '⭐ Favorites Only', value: 'favorites' },
+      { label: '📅 Recently Modified', value: 'recent' },
+      { label: '🌟 JavaScript', value: 'JavaScript' },
+      { label: '🔷 TypeScript', value: 'TypeScript' },
+      { label: '🐍 Python', value: 'Python' },
+      { label: '☕ Java', value: 'Java' },
+      { label: '⚡ C++', value: 'C++' },
+      { label: '🦀 Rust', value: 'Rust' },
+      { label: '💎 Ruby', value: 'Ruby' },
+      { label: '🐘 PHP', value: 'PHP' },
+      { label: '🔵 Go', value: 'Go' },
+      { label: '💜 C#', value: 'C#' },
+    ]
+
+    const selectedOption = await vscode.window.showQuickPick(filterOptions, {
+      placeHolder: 'Select filter criteria',
+    })
+
+    if (selectedOption) {
+      switch (selectedOption.value) {
+        case 'all': {
+          this.clearFilters()
+          break
+        }
+        case 'favorites': {
+          this.setFilter({ isFavorite: true })
+          break
+        }
+        case 'recent': {
+          const oneWeekAgo = new Date()
+          oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+          this.setFilter({ lastModifiedAfter: oneWeekAgo })
+          break
+        }
+        default: {
+          this.setFilter({ language: selectedOption.value })
+          break
+        }
+      }
     }
   }
 
+  /**
+   * Set filter profile view mode
+   * @param showProfiles
+   */
   /**
    * Get tree item representation
    * @param element
@@ -164,25 +186,15 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
     if (this.isLoading) return [this.createLoadingItem()]
 
     // Get repositories, potentially filtered by active profile
-    let repositories = this.repositoryManager.getRepositories(
+    const repositories = this.repositoryManager.getRepositories(
       this.currentFilter,
       { field: 'name', order: 'asc' },
     )
-
-    // Apply active filter profile if one is set
-    const activeProfile = this.filterProfileManager.getCurrentProfile()
-    if (activeProfile) {
-      repositories = this.applyFilterProfileToRepositories(
-        repositories,
-        activeProfile,
-      )
-    }
 
     console.warn('=== TREE DATA PROVIDER DEBUG ===')
     console.warn(`Total repositories: ${String(repositories.length)}`)
     console.warn(`Group by: ${this.groupBy}`)
     console.warn('Current filter:', this.currentFilter)
-    console.warn('Active profile:', activeProfile?.name ?? 'None')
 
     if (repositories.length === 0) return [this.createEmptyStateItem()]
 
@@ -215,55 +227,9 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
         case 'favorite':
           groupKey = repo.isFavorite ? 'Favorites' : 'Other'
           break
-        case 'filterProfile': {
-          // Find filter profile containing this repository
-          const profiles = this.filterProfileManager.getProfiles()
-          const matchingProfile = profiles.find((profile) => {
-            // Check if repository matches profile filters
-            const filters = profile.filters
-
-            // Check languages
-            if (
-              filters.languages.length > 0 &&
-              !filters.languages.includes(repo.metadata.language)
-            )
-              return false
-
-            // Check favorites
-            if (filters.favoritesOnly && !repo.isFavorite) return false
-
-            // Check git states
-            if (filters.gitStates.length > 0) {
-              const repoGitState = repo.gitInfo.hasUncommitted
-                ? 'modified'
-                : 'clean'
-              if (!filters.gitStates.includes(repoGitState)) return false
-            }
-
-            // Check archived state
-            if (filters.excludeArchived && repo.isArchived) return false
-
-            // Check tests
-            if (
-              filters.hasTests !== undefined &&
-              repo.metadata.hasTests !== filters.hasTests
-            )
-              return false
-
-            // Check CI/CD
-            if (
-              filters.hasCicd !== undefined &&
-              repo.metadata.hasCicd !== filters.hasCicd
-            )
-              return false
-
-            return true
-          })
-          groupKey = matchingProfile ? matchingProfile.name : 'No Profile Match'
-          break
-        }
         default:
-          groupKey = 'All'
+          groupKey = 'Unknown'
+          break
       }
 
       if (!groups.has(groupKey)) groups.set(groupKey, [])
@@ -316,13 +282,21 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
     const label = this.getRepositoryLabel(repository)
     const item = new TreeItem(label, vscode.TreeItemCollapsibleState.None)
 
+    // Check if repository is favorite
+    const isFavorite = this.favoriteService.isFavorite(repository.path)
+
     // Set properties
-    item.contextValue = 'repository'
+    item.contextValue = isFavorite ? 'repositoryFavorite' : 'repository'
     item.tooltip = this.getRepositoryTooltip(repository)
     item.iconPath = this.getRepositoryIcon(repository)
     item.description = this.getRepositoryDescription(repository)
 
-    // Store repository data
+    // Set color based on Git status
+    if (repository.gitInfo.hasUncommitted)
+      item.resourceUri = vscode.Uri.file(repository.path)
+      // Use Git decorations - VS Code will automatically apply colors
+
+      // Store repository data
     ;(item as ExtendedTreeItem).repository = repository
 
     // Set command for opening repository
@@ -340,8 +314,8 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
    * @param repository
    */
   private getRepositoryLabel(repository: Repository): string {
-    // お気に入り状態はlabelではなくdescriptionで表示する
-    return repository.name
+    const isFavorite = this.favoriteService.isFavorite(repository.path)
+    return isFavorite ? `⭐ ${repository.name}` : repository.name
   }
 
   /**
@@ -401,10 +375,10 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
       timeStr = `${String(years)}y ago`
     }
 
-    parts.push(timeStr)
+    // Highlight recent updates (within 1 week)
+    if (diffDays < daysPerWeek) timeStr = `🔥 ${timeStr}` // Fire emoji for recent updates
 
-    // お気に入り状態を最後に追加
-    if (repository.isFavorite) parts.push('⭐')
+    parts.push(timeStr)
 
     return parts.join(' • ')
   }
@@ -564,12 +538,17 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
    */
   private createLoadingItem(): TreeItem {
     const loadingItem = new TreeItem(
-      '$(loading~spin) Loading repositories...',
+      '$(sync~spin) Scanning repositories...',
       vscode.TreeItemCollapsibleState.None,
     )
     loadingItem.contextValue = 'loading'
-    loadingItem.tooltip = 'Scanning directories for repositories...'
-    loadingItem.description = 'Please wait'
+    loadingItem.tooltip =
+      'Analyzing directory structure and Git repositories...'
+    loadingItem.description = '$(loading~spin) Please wait...'
+    loadingItem.iconPath = new vscode.ThemeIcon(
+      'sync~spin',
+      new vscode.ThemeColor('progressBar.background'),
+    )
 
     return loadingItem
   }
@@ -599,202 +578,6 @@ export class ReposManagerProvider implements vscode.TreeDataProvider<TreeItem> {
    * @param repositories
    * @param profile
    */
-  private applyFilterProfileToRepositories(
-    repositories: Repository[],
-    profile: FilterProfile,
-  ): Repository[] {
-    return repositories.filter((repo) =>
-      this.doesRepositoryMatchFilters(repo, profile.filters),
-    )
-  }
-
-  /**
-   * Check if repository matches all filter criteria
-   * @param repo
-   * @param filters
-   */
-  private doesRepositoryMatchFilters(
-    repo: Repository,
-    filters: FilterCriteria,
-  ): boolean {
-    return (
-      this.checkLanguageFilter(repo, filters) &&
-      this.checkFavoritesFilter(repo, filters) &&
-      this.checkGitStatesFilter(repo, filters) &&
-      this.checkArchivedFilter(repo, filters) &&
-      this.checkTestsFilter(repo, filters) &&
-      this.checkCicdFilter(repo, filters) &&
-      this.checkDateRangeFilter(repo, filters) &&
-      this.checkSizeRangeFilter(repo, filters) &&
-      this.checkTagsFilter(repo, filters) &&
-      this.checkOwnersFilter(repo, filters) &&
-      this.checkCustomConditionsFilter(repo, filters)
-    )
-  }
-
-  /**
-   * Check language filter
-   */
-  private checkLanguageFilter(
-    repo: Repository,
-    filters: FilterCriteria,
-  ): boolean {
-    if (
-      filters.languages.length > 0 &&
-      !filters.languages.includes(repo.metadata.language)
-    )
-      return false
-    return true
-  }
-
-  /**
-   * Check favorites filter
-   */
-  private checkFavoritesFilter(
-    repo: Repository,
-    filters: FilterCriteria,
-  ): boolean {
-    if (filters.favoritesOnly && !repo.isFavorite) return false
-    return true
-  }
-
-  /**
-   * Check git states filter
-   */
-  private checkGitStatesFilter(
-    repo: Repository,
-    filters: FilterCriteria,
-  ): boolean {
-    if (filters.gitStates.length > 0) {
-      const repoGitState = repo.gitInfo.hasUncommitted ? 'modified' : 'clean'
-      if (!filters.gitStates.includes(repoGitState)) return false
-    }
-    return true
-  }
-
-  /**
-   * Check archived filter
-   */
-  private checkArchivedFilter(
-    repo: Repository,
-    filters: FilterCriteria,
-  ): boolean {
-    if (filters.excludeArchived && repo.isArchived) return false
-    return true
-  }
-
-  /**
-   * Check tests filter
-   */
-  private checkTestsFilter(repo: Repository, filters: FilterCriteria): boolean {
-    if (
-      filters.hasTests !== undefined &&
-      repo.metadata.hasTests !== filters.hasTests
-    )
-      return false
-    return true
-  }
-
-  /**
-   * Check CI/CD filter
-   */
-  private checkCicdFilter(repo: Repository, filters: FilterCriteria): boolean {
-    if (
-      filters.hasCicd !== undefined &&
-      repo.metadata.hasCicd !== filters.hasCicd
-    )
-      return false
-    return true
-  }
-
-  /**
-   * Check date range filter
-   */
-  private checkDateRangeFilter(
-    repo: Repository,
-    filters: FilterCriteria,
-  ): boolean {
-    if (filters.dateRange) {
-      const lastCommit = repo.gitInfo.lastCommitDate
-      if (
-        lastCommit < filters.dateRange.start ||
-        lastCommit > filters.dateRange.end
-      )
-        return false
-    }
-    return true
-  }
-
-  /**
-   * Check size range filter
-   */
-  private checkSizeRangeFilter(
-    repo: Repository,
-    filters: FilterCriteria,
-  ): boolean {
-    if (filters.sizeRange) {
-      const totalFiles = repo.metadata.projectSize.totalFiles
-
-      // Check file count range
-      if (
-        totalFiles < filters.sizeRange.minFiles ||
-        totalFiles > filters.sizeRange.maxFiles
-      )
-        return false
-
-      // Note: Line count range not available in current ProjectSize interface
-      if (
-        filters.sizeRange.minLines !== undefined ||
-        filters.sizeRange.maxLines !== undefined
-      ) {
-        console.warn(
-          'Line count filtering requested but not supported in current ProjectSize interface',
-        )
-      }
-    }
-    return true
-  }
-
-  /**
-   * Check tags filter
-   */
-  private checkTagsFilter(repo: Repository, filters: FilterCriteria): boolean {
-    if (filters.tags.length > 0) {
-      const hasMatchingTag = filters.tags.some((tag) => repo.tags.includes(tag))
-      if (!hasMatchingTag) return false
-    }
-    return true
-  }
-
-  /**
-   * Check owners filter
-   */
-  private checkOwnersFilter(
-    repo: Repository,
-    filters: FilterCriteria,
-  ): boolean {
-    if (filters.owners.length > 0)
-      if (!filters.owners.includes(repo.gitInfo.owner)) return false
-
-    return true
-  }
-
-  /**
-   * Check custom conditions filter
-   */
-  private checkCustomConditionsFilter(
-    repo: Repository,
-    filters: FilterCriteria,
-  ): boolean {
-    if (filters.customConditions && filters.customConditions.length > 0) {
-      // For now, just log custom conditions - full implementation would require more complex logic
-      console.warn(
-        'Custom conditions detected but not fully implemented:',
-        filters.customConditions,
-      )
-    }
-    return true
-  }
 }
 
 /**

@@ -1,9 +1,9 @@
-import { FilterProfileManager } from '@core/FilterProfileManager'
 import { RepositoryManager } from '@core/RepositoryManager'
 import { CommandRegistry } from '@extension/CommandRegistry'
 import { DialogProvider } from '@extension/DialogProvider'
 import { ProgressManager } from '@extension/ProgressManager'
 import { ConfigurationService } from '@services/ConfigurationService'
+import { FavoriteService } from '@services/FavoriteService'
 import { ReposManagerProvider } from '@ui/ReposManagerProvider'
 import * as vscode from 'vscode'
 
@@ -13,7 +13,7 @@ import * as vscode from 'vscode'
  */
 export class ExtensionManager {
   private repositoryManager?: RepositoryManager
-  private filterProfileManager?: FilterProfileManager
+  private favoriteService?: FavoriteService
   private treeDataProvider?: ReposManagerProvider
   private commandRegistry?: CommandRegistry
   private readonly configService: ConfigurationService
@@ -55,8 +55,6 @@ export class ExtensionManager {
   public deactivate(): void {
     console.warn('🛑 [Repos Manager] Extension is being deactivated')
 
-    if (this.filterProfileManager) this.filterProfileManager.dispose()
-
     if (this.treeDataProvider) this.treeDataProvider.dispose()
   }
 
@@ -71,13 +69,13 @@ export class ExtensionManager {
   }
 
   /**
-   * Get filter profile manager instance
+   * Get favorite service instance
    */
-  public getFilterProfileManager(): FilterProfileManager {
-    if (!this.filterProfileManager)
-      throw new Error('Filter profile manager not initialized')
+  public getFavoriteService(): FavoriteService {
+    if (!this.favoriteService)
+      throw new Error('Favorite service not initialized')
 
-    return this.filterProfileManager
+    return this.favoriteService
   }
 
   /**
@@ -100,10 +98,10 @@ export class ExtensionManager {
       this.configService,
       this.context,
     )
-    this.filterProfileManager = new FilterProfileManager(this.context)
+    this.favoriteService = new FavoriteService(this.context)
     this.treeDataProvider = new ReposManagerProvider(
       this.repositoryManager,
-      this.filterProfileManager,
+      this.favoriteService,
     )
 
     console.warn('✅ [Repos Manager] Services initialized')
@@ -134,19 +132,15 @@ export class ExtensionManager {
    * Register all commands
    */
   private registerCommands(): void {
-    if (
-      !this.repositoryManager ||
-      !this.filterProfileManager ||
-      !this.treeDataProvider
-    )
+    if (!this.repositoryManager || !this.treeDataProvider)
       throw new Error('Services not initialized')
 
     this.commandRegistry = new CommandRegistry(
       this.context,
       this.repositoryManager,
-      this.filterProfileManager,
       this.treeDataProvider,
       this.progressManager,
+      this,
     )
 
     this.commandRegistry.registerAllCommands()

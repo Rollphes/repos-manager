@@ -1,9 +1,13 @@
-import { FilterProfileManager } from '@core/FilterProfileManager'
 import { RepositoryManager } from '@core/RepositoryManager'
+import { ExtensionManager } from '@extension/ExtensionManager'
 import { ProgressManager } from '@extension/ProgressManager'
-import { FilterProfile, Repository } from '@types'
+import { Repository } from '@types'
 import { ReposManagerProvider } from '@ui/ReposManagerProvider'
 import * as vscode from 'vscode'
+
+interface ExtendedTreeItem extends vscode.TreeItem {
+  repository?: Repository
+}
 
 /**
  * Command Registry - Manages all extension commands
@@ -15,9 +19,9 @@ export class CommandRegistry {
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly repositoryManager: RepositoryManager,
-    private readonly filterProfileManager: FilterProfileManager,
     private readonly treeDataProvider: ReposManagerProvider,
     private readonly progressManager: ProgressManager,
+    private readonly extensionManager: ExtensionManager,
   ) {}
 
   /**
@@ -26,7 +30,6 @@ export class CommandRegistry {
   public registerAllCommands(): void {
     this.registerMainCommands()
     this.registerRepositoryCommands()
-    this.registerFilterProfileCommands()
   }
 
   /**
@@ -48,6 +51,7 @@ export class CommandRegistry {
       'reposManager.refresh',
       async () => {
         try {
+          this.treeDataProvider.setLoading(true)
           await this.progressManager.withProgress(
             {
               title: '🔄 Refreshing repositories...',
@@ -71,6 +75,8 @@ export class CommandRegistry {
         } catch (error) {
           console.error('Refresh command failed:', error)
           vscode.window.showErrorMessage('Failed to refresh repositories')
+        } finally {
+          this.treeDataProvider.setLoading(false)
         }
       },
     )
@@ -91,6 +97,7 @@ export class CommandRegistry {
       'reposManager.scanRepositories',
       async () => {
         try {
+          this.treeDataProvider.setLoading(true)
           await this.progressManager.withProgress(
             {
               title: '🔍 Scanning repositories...',
@@ -114,11 +121,44 @@ export class CommandRegistry {
         } catch (error) {
           console.error('Scan command failed:', error)
           vscode.window.showErrorMessage('Failed to scan repositories')
+        } finally {
+          this.treeDataProvider.setLoading(false)
         }
       },
     )
 
-    this.disposables.push(refreshCommand, openSettingsCommand, scanCommand)
+    // Search repositories command
+    const searchCommand = vscode.commands.registerCommand(
+      'reposManager.search',
+      async () => {
+        await this.treeDataProvider.showSearchDialog()
+      },
+    )
+
+    // Filter repositories command
+    const filterCommand = vscode.commands.registerCommand(
+      'reposManager.filter',
+      async () => {
+        await this.treeDataProvider.showFilterDialog()
+      },
+    )
+
+    // Clear filters command
+    const clearFiltersCommand = vscode.commands.registerCommand(
+      'reposManager.clearFilters',
+      () => {
+        this.treeDataProvider.clearFilters()
+      },
+    )
+
+    this.disposables.push(
+      refreshCommand,
+      openSettingsCommand,
+      scanCommand,
+      searchCommand,
+      filterCommand,
+      clearFiltersCommand,
+    )
   }
 
   /**
@@ -217,142 +257,107 @@ export class CommandRegistry {
       },
     )
 
+    // Toggle favorite command
+    const toggleFavoriteCommand = vscode.commands.registerCommand(
+      'reposManager.toggleFavorite',
+      async (repository?: Repository) => {
+        if (!repository) {
+          vscode.window.showWarningMessage('No repository selected')
+          return
+        }
+
+        try {
+          const favoriteService = this.repositoryManager.getFavoriteService()
+          const isFavorite = favoriteService.isFavorite(repository.id)
+
+          if (isFavorite) {
+            await favoriteService.removeFavorite(repository.id)
+            vscode.window.showInformationMessage(
+              `✅ Removed ${repository.name} from favorites`,
+            )
+          } else {
+            await favoriteService.addFavorite(repository.id)
+            vscode.window.showInformationMessage(
+              `⭐ Added ${repository.name} to favorites`,
+            )
+          }
+
+          this.treeDataProvider.refresh()
+        } catch (error) {
+          console.error('Failed to toggle favorite:', error)
+          vscode.window.showErrorMessage('Failed to toggle favorite status')
+        }
+      },
+    )
+
+    // Add to favorites command
+    const addToFavoritesCommand = vscode.commands.registerCommand(
+      'reposManager.addToFavorites',
+      async (treeItem?: vscode.TreeItem) => {
+        if (!treeItem || !(treeItem as ExtendedTreeItem).repository) {
+          vscode.window.showWarningMessage('No repository selected')
+          return
+        }
+
+        const repository = (treeItem as ExtendedTreeItem).repository
+
+        if (!repository) {
+          vscode.window.showWarningMessage('No repository selected')
+          return
+        }
+
+        try {
+          const favoriteService = this.extensionManager.getFavoriteService()
+          await favoriteService.addFavorite(repository.path)
+          vscode.window.showInformationMessage(
+            `⭐ Added ${repository.name} to favorites`,
+          )
+          this.treeDataProvider.refresh()
+        } catch (error) {
+          console.error('Failed to add to favorites:', error)
+          vscode.window.showErrorMessage('Failed to add to favorites')
+        }
+      },
+    )
+
+    // Remove from favorites command
+    const removeFromFavoritesCommand = vscode.commands.registerCommand(
+      'reposManager.removeFromFavorites',
+      async (treeItem?: vscode.TreeItem) => {
+        if (!treeItem || !(treeItem as ExtendedTreeItem).repository) {
+          vscode.window.showWarningMessage('No repository selected')
+          return
+        }
+
+        const repository = (treeItem as ExtendedTreeItem).repository
+
+        if (!repository) {
+          vscode.window.showWarningMessage('No repository selected')
+          return
+        }
+
+        try {
+          const favoriteService = this.extensionManager.getFavoriteService()
+          await favoriteService.removeFavorite(repository.path)
+          vscode.window.showInformationMessage(
+            `✅ Removed ${repository.name} from favorites`,
+          )
+          this.treeDataProvider.refresh()
+        } catch (error) {
+          console.error('Failed to remove from favorites:', error)
+          vscode.window.showErrorMessage('Failed to remove from favorites')
+        }
+      },
+    )
+
     this.disposables.push(
       openRepoCommand,
       openRepoNewWindowCommand,
       openInTerminalCommand,
       copyPathCommand,
-    )
-  }
-
-  /**
-   * Register filter profile commands
-   */
-  private registerFilterProfileCommands(): void {
-    // Create filter profile command
-    const createProfileCommand = vscode.commands.registerCommand(
-      'reposManager.createFilterProfile',
-      async () => {
-        try {
-          const name = await vscode.window.showInputBox({
-            prompt: 'Enter filter profile name',
-            validateInput: (value) => {
-              if (!value || value.trim().length === 0)
-                return 'Profile name is required'
-
-              if (
-                this.filterProfileManager
-                  .getProfiles()
-                  .some((p) => p.name === value.trim())
-              )
-                return 'Profile name already exists'
-
-              return null
-            },
-          })
-
-          if (!name) return
-
-          await this.filterProfileManager.createProfile(name.trim(), {
-            languages: [],
-            owners: [],
-            gitStates: [],
-            tags: [],
-            favoritesOnly: false,
-            excludeArchived: true,
-            customConditions: [],
-          })
-
-          vscode.window.showInformationMessage(
-            `✅ Filter profile '${name}' created successfully`,
-          )
-          this.treeDataProvider.refresh()
-        } catch (error) {
-          console.error('Failed to create filter profile:', error)
-          vscode.window.showErrorMessage('Failed to create filter profile')
-        }
-      },
-    )
-
-    // Apply filter profile command
-    const applyProfileCommand = vscode.commands.registerCommand(
-      'reposManager.applyFilterProfile',
-      async (profile?: FilterProfile) => {
-        try {
-          let selectedProfile = profile
-
-          if (!selectedProfile) {
-            const profiles = this.filterProfileManager.getProfiles()
-            if (profiles.length === 0) {
-              vscode.window.showWarningMessage('No filter profiles available')
-              return
-            }
-
-            interface ProfileQuickPickItem extends vscode.QuickPickItem {
-              profile: FilterProfile
-            }
-
-            const items: ProfileQuickPickItem[] = profiles.map((p) => ({
-              label: p.name,
-              description: p.description,
-              profile: p,
-            }))
-
-            const selected = await vscode.window.showQuickPick(items, {
-              placeHolder: 'Select a filter profile to apply',
-            })
-
-            if (!selected) return
-
-            selectedProfile = selected.profile
-          }
-
-          await this.filterProfileManager.applyProfile(selectedProfile.id, [])
-          this.treeDataProvider.refresh()
-          vscode.window.showInformationMessage(
-            `✅ Filter profile '${selectedProfile.name}' applied successfully`,
-          )
-        } catch (error) {
-          console.error('Failed to apply filter profile:', error)
-          vscode.window.showErrorMessage('Failed to apply filter profile')
-        }
-      },
-    )
-
-    // Delete filter profile command
-    const deleteProfileCommand = vscode.commands.registerCommand(
-      'reposManager.deleteFilterProfile',
-      async (profile?: FilterProfile) => {
-        if (!profile) {
-          vscode.window.showWarningMessage('No profile selected')
-          return
-        }
-
-        try {
-          const confirm = await vscode.window.showWarningMessage(
-            `Are you sure you want to delete the filter profile '${profile.name}'?`,
-            { modal: true },
-            'Delete',
-          )
-
-          if (confirm === 'Delete') {
-            await this.filterProfileManager.deleteProfile(profile.id)
-            vscode.window.showInformationMessage(
-              `✅ Filter profile '${profile.name}' deleted successfully`,
-            )
-            this.treeDataProvider.refresh()
-          }
-        } catch (error) {
-          console.error('Failed to delete filter profile:', error)
-          vscode.window.showErrorMessage('Failed to delete filter profile')
-        }
-      },
-    )
-
-    this.disposables.push(
-      createProfileCommand,
-      applyProfileCommand,
-      deleteProfileCommand,
+      toggleFavoriteCommand,
+      addToFavoritesCommand,
+      removeFromFavoritesCommand,
     )
   }
 }

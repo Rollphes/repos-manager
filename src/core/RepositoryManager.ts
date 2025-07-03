@@ -98,6 +98,8 @@ export class RepositoryManager {
       let completedPaths = 0
       const scanPercent = RepositoryManager.SCAN_COMPLETION_PERCENTAGE
 
+      const invalidPaths: string[] = []
+
       for (const rootPath of rootPaths) {
         if (cancellationToken?.isCancellationRequested) {
           console.warn('Repository scan cancelled')
@@ -119,6 +121,7 @@ export class RepositoryManager {
           await fs.access(rootPath)
         } catch {
           console.warn(`Path does not exist or is not accessible: ${rootPath}`)
+          invalidPaths.push(rootPath)
           completedPaths++
           continue
         }
@@ -146,6 +149,14 @@ export class RepositoryManager {
         console.warn(
           `Path scan completed: ${rootPath}, found: ${String(foundRepositories.size)} total repos`,
         )
+      }
+
+      // Report invalid paths to user
+      if (invalidPaths.length > 0) {
+        const errorMessage = `⚠️ Some scan paths were not accessible: ${invalidPaths.join(', ')}`
+        console.error(errorMessage)
+        // This will be displayed by the progress callback
+        progressCallback?.(errorMessage, undefined)
       }
 
       // Update repositories map
@@ -302,6 +313,13 @@ export class RepositoryManager {
   public clearRepositories(): void {
     this.repositories.clear()
     this.onDidChangeRepositories.fire()
+  }
+
+  /**
+   * Get the favorite service instance
+   */
+  public getFavoriteService(): FavoriteService {
+    return this.favoriteService
   }
 
   /**
@@ -490,6 +508,7 @@ export class RepositoryManager {
     repositories: Repository[],
     filter: RepositoryFilter,
   ): Repository[] {
+    // eslint-disable-next-line complexity
     return repositories.filter((repo) => {
       // Search term filter
       if (
@@ -499,7 +518,10 @@ export class RepositoryManager {
         return false
 
       // Language filter
-      if (filter.language && repo.metadata.language !== filter.language)
+      if (
+        filter.language &&
+        repo.metadata.language.toLowerCase() !== filter.language.toLowerCase()
+      )
         return false
 
       // Tags filter
@@ -540,6 +562,17 @@ export class RepositoryManager {
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (endDate && repoDate > endDate) return false
       }
+
+      // Last modified after filter
+      if (filter.lastModifiedAfter)
+        if (repo.gitInfo.lastCommitDate < filter.lastModifiedAfter) return false
+
+      // Name filter (for search functionality)
+      if (
+        filter.name &&
+        !repo.name.toLowerCase().includes(filter.name.toLowerCase())
+      )
+        return false
 
       return true
     })
